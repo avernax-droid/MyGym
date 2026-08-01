@@ -1,0 +1,21 @@
+# Ambientes virtuais e Variáveis de Ambiente
+.env
+venv/
+env/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Configurações do VS Code
+.vscode/
+
+# Logs
+*.log
+
+# Diretórios e Arquivos do Projeto MyGym
+DOC/
+TOOLS/
+*.txt

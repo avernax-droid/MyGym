@@ -1,0 +1,343 @@
+{# ==============================================================================
+# PROJETO: MyGym
+# MÓDULO: templates/backoffice/cadastro_funcionario.html
+# DATA DE CRIAÇÃO: 31/07/26
+# TÍTULO: Cadastro de Funcionários
+# FUNÇÃO: Interface limpa e ampla para inserção dos dados de novos funcionários
+#         no backoffice, herdando a identidade visual principal.
+#
+# HISTÓRICO DE ALTERAÇÕES:
+# 31/07/26: Criação inicial da interface de cadastro.
+# 31/07/26: Refatoração visual completa para alinhar ao Design System do projeto e alteração do título.
+# 31/07/26: Ajustes de usabilidade: expansão do campo e-mail, máscara de WhatsApp, navegação por Enter,
+#           validação dinâmica do botão Salvar e alertas visuais para campos incorretos/vazios.
+# 31/07/26: Substituição do cargo por lista vertical suspensa contendo as opções e o item "Outros".
+# ============================================================================== #}
+
+{% extends "base.html" %}
+
+{% block title %}Cadastro de Funcionário - MyGym{% endblock %}
+
+{% block head %}
+<style>
+    .container-cadastro {
+        background-color: #001524;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 2.5rem 3rem;
+        border-radius: 8px;
+        width: 100%;
+        max-width: 650px;
+        box-shadow: 0px 15px 35px rgba(0, 0, 0, 0.5);
+        color: #FFFFFF;
+        box-sizing: border-box;
+    }
+
+    .header-pagina {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+
+    .header-pagina h1 {
+        font-size: 1.8rem;
+        font-weight: 600;
+        margin: 0;
+        letter-spacing: 1px;
+        color: #FFFFFF;
+        font-style: normal;
+    }
+
+    .form-linha {
+        display: flex;
+        gap: 1.5rem;
+        margin-bottom: 1.2rem;
+    }
+
+    .form-grupo {
+        margin-bottom: 1.2rem;
+        text-align: left;
+        width: 100%;
+    }
+
+    .form-metade {
+        flex: 1;
+    }
+
+    /* Dá mais destaque ao campo de e-mail */
+    .form-email-largo {
+        flex: 1.5;
+    }
+
+    .form-grupo label {
+        display: block;
+        margin-bottom: 0.4rem;
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    .input-limpo {
+        width: 100%;
+        padding: 0.9rem 1rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+        color: #FFFFFF;
+        font-family: var(--fonte-principal);
+        font-size: 1rem;
+        box-sizing: border-box;
+        transition: all 0.3s ease;
+    }
+
+    .input-limpo::placeholder {
+        color: rgba(255, 255, 255, 0.4);
+    }
+
+    .input-limpo:focus {
+        outline: none;
+        border-color: #80D5C9;
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    select.input-limpo option {
+        background-color: #001524;
+        color: #FFFFFF;
+    }
+
+    .texto-apoio {
+        display: block;
+        margin-top: 0.3rem;
+        font-size: 0.8rem;
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    /* Mensagem de Erro / Alerta do Campo */
+    .msg-erro {
+        display: none;
+        color: #ff6b6b;
+        font-size: 0.8rem;
+        margin-top: 0.3rem;
+    }
+
+    .form-acoes {
+        display: flex;
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+
+    .btn-custom {
+        flex: 1;
+        padding: 0.9rem;
+        border-radius: 6px;
+        font-family: var(--fonte-principal);
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        text-decoration: none;
+        text-align: center;
+        transition: all 0.3s ease;
+        border: none;
+    }
+
+    .btn-salvar {
+        background-color: #80D5C9;
+        color: #002B49;
+    }
+
+    /* Estado desativado do botão salvar */
+    .btn-salvar:disabled {
+        background-color: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.3);
+        cursor: not-allowed;
+    }
+
+    .btn-salvar:not(:disabled):hover {
+        background-color: #ffffff;
+    }
+
+    .btn-cancelar {
+        background-color: transparent;
+        color: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-cancelar:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+        color: #FFFFFF;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-cadastro">
+    <header class="header-pagina">
+        <h1>Cadastro de Funcionário</h1>
+    </header>
+
+    <form id="formFuncionario" action="/backoffice/funcionarios/salvar" method="POST">
+        
+        <div class="form-grupo">
+            <label for="nome_completo">Nome Completo</label>
+            <input type="text" id="nome_completo" name="nome_completo" required 
+                   placeholder="Ex: João da Silva" class="input-limpo campo-validavel">
+            <span class="msg-erro" id-erro="nome_completo">Preencha o Nome Completo.</span>
+        </div>
+
+        <div class="form-linha">
+            <div class="form-grupo form-email-largo">
+                <label for="email">E-mail</label>
+                <input type="email" id="email" name="email" required 
+                       placeholder="joao@mygym.com" class="input-limpo campo-validavel">
+                <span class="msg-erro" id-erro="email">E-mail inválido ou incompleto (ex: usuario@dominio.com).</span>
+            </div>
+
+            <div class="form-grupo form-metade">
+                <label for="telefone">Telefone (WhatsApp)</label>
+                <input type="text" id="telefone" name="telefone" required 
+                       placeholder="(11) 99999-9999" maxlength="15" class="input-limpo campo-validavel">
+                <span class="msg-erro" id-erro="telefone">Preencha o Telefone/WhatsApp corretamente.</span>
+            </div>
+        </div>
+
+        <div class="form-linha">
+            <div class="form-grupo form-metade">
+                <label for="cargo">Cargo</label>
+                <select id="cargo" name="cargo" required class="input-limpo campo-validavel">
+                    <option value="" disabled selected>Selecione o cargo...</option>
+                    <option value="coordenador">Coordenador</option>
+                    <option value="recepcionista">Recepcionista</option>
+                    <option value="seguranca">Segurança</option>
+                    <option value="professor">Professor</option>
+                    <option value="faxineira">Faxineira</option>
+                    <option value="outros">Outros</option>
+                </select>
+                <small class="texto-apoio">As permissões de acesso serão baseadas neste cargo.</small>
+                <span class="msg-erro" id-erro="cargo">Selecione um Cargo.</span>
+            </div>
+
+            <div class="form-grupo form-metade">
+                <label for="status">Status Inicial</label>
+                <select id="status" name="status" class="input-limpo">
+                    <option value="ativo" selected>Ativo</option>
+                    <option value="inativo">Inativo</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-acoes">
+            <button type="submit" id="btnSalvar" class="btn-custom btn-salvar" disabled>Salvar</button>
+            <a href="/" class="btn-custom btn-cancelar">Cancelar</a>
+        </div>
+    </form>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const form = document.getElementById("formFuncionario");
+        const inputsValidaveis = form.querySelectorAll(".campo-validavel");
+        const btnSalvar = document.getElementById("btnSalvar");
+        const inputTelefone = document.getElementById("telefone");
+        const inputEmail = document.getElementById("email");
+
+        // 1. Navegação por ENTER simulando o TAB nos inputs principais
+        const elementosNavegacao = [
+            document.getElementById("nome_completo"), 
+            inputEmail, 
+            inputTelefone, 
+            document.getElementById("cargo")
+        ];
+
+        elementosNavegacao.forEach((elemento, index) => {
+            elemento.addEventListener("keydown", function(e) {
+                if (e.key === "Enter") {
+                    e.preventDefault();
+                    const proximo = elementosNavegacao[index + 1];
+                    if (proximo) {
+                        proximo.focus();
+                    } else {
+                        btnSalvar.focus();
+                    }
+                }
+            });
+        });
+
+        // 2. Máscara automática para WhatsApp (XX) XXXXX-XXXX
+        inputTelefone.addEventListener("input", function(e) {
+            let valor = e.target.value.replace(/\D/g, "");
+            if (valor.length > 11) valor = valor.slice(0, 11);
+            
+            if (valor.length > 6) {
+                valor = `(${valor.slice(0, 2)}) ${valor.slice(2, 7)}-${valor.slice(7)}`;
+            } else if (valor.length > 2) {
+                valor = `(${valor.slice(0, 2)}) ${valor.slice(2)}`;
+            } else if (valor.length > 0) {
+                valor = `(${valor}`;
+            }
+            e.target.value = valor;
+            validarFormulario();
+        });
+
+        // Validação estrutural básica de e-mail
+        function validarEmail(email) {
+            const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return regex.test(email);
+        }
+
+        // 3. Validação em tempo real e controle do botão Salvar com alertas visuais
+        function validarFormulario() {
+            let formularioValido = true;
+
+            inputsValidaveis.forEach(input => {
+                const erroSpan = document.querySelector(`[id-erro="${input.id}"]`);
+                let campoValido = true;
+
+                if (input.value.trim() === "") {
+                    campoValido = false;
+                } else if (input === inputEmail && !validarEmail(input.value)) {
+                    campoValido = false;
+                }
+
+                if (!campoValido) {
+                    formularioValido = false;
+                    if (input.value.trim() !== "") {
+                        if (erroSpan) erroSpan.style.display = "block";
+                    } else {
+                        if (erroSpan) erroSpan.style.display = "none";
+                    }
+                } else {
+                    if (erroSpan) erroSpan.style.display = "none";
+                }
+            });
+
+            btnSalvar.disabled = !formularioValido;
+        }
+
+        inputsValidaveis.forEach(input => {
+            input.addEventListener("input", validarFormulario);
+            input.addEventListener("change", validarFormulario); // Necessário para capturar a seleção do select
+            input.addEventListener("blur", function() {
+                const erroSpan = document.querySelector(`[id-erro="${input.id}"]`);
+                if (input.value.trim() === "" || (input === inputEmail && !validarEmail(input.value))) {
+                    if (erroSpan) erroSpan.style.display = "block";
+                }
+            });
+        });
+
+        // Validação final ao tentar submeter
+        form.addEventListener("submit", function(e) {
+            let valido = true;
+            inputsValidaveis.forEach(input => {
+                const erroSpan = document.querySelector(`[id-erro="${input.id}"]`);
+                if (input.value.trim() === "" || (input === inputEmail && !validarEmail(input.value))) {
+                    if (erroSpan) erroSpan.style.display = "block";
+                    valido = false;
+                }
+            });
+
+            if (!valido) {
+                e.preventDefault();
+            }
+        });
+    });
+</script>
+{% endblock %}

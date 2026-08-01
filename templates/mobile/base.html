@@ -1,0 +1,115 @@
+{#
+==========================================================================
+PROJETO: MyGym
+MÓDULO: templates/mobile/base.html
+DATA DE CRIAÇÃO: 26/07/30
+TÍTULO: Layout Mestre (Mobile)
+FUNÇÃO: Serve como o esqueleto principal para todas as telas do sistema mobile. Define a estrutura HTML global, variáveis CSS e foca na ergonomia touch (botões ghost expandidos e layout em coluna).
+
+HISTÓRICO DE ALTERAÇÕES:
+26/07/30: Criação do layout mestre mobile com foco em usabilidade touch e blocos Jinja2.
+============================================================================== 
+#}
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <!-- Viewport estrito para evitar zoom indesejado durante toques rápidos -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>{% block title %}MyGym Mobile{% endblock %}</title>
+    
+    <!-- Importação de Fontes: Poppins -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,600;0,800;1,300;1,800&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Design System - Variáveis Globais */
+        :root {
+            --cor-primaria: #002B49; 
+            --cor-secundaria: #80D5C9; 
+            --texto-claro: #FFFFFF;
+            --texto-escuro: #2C3E50;
+            --fonte-principal: 'Poppins', sans-serif;
+        }
+
+        /* Reset e Estilos Globais */
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: var(--fonte-principal);
+            background: linear-gradient(to bottom, var(--cor-primaria) 0%, var(--cor-secundaria) 100%);
+            background-attachment: fixed;
+            color: var(--texto-claro);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header Mobile */
+        .header-mobile {
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .marca-mygym {
+            font-weight: 800;
+            font-style: italic;
+            font-size: 2.2rem;
+            color: var(--texto-claro);
+            text-decoration: none;
+            letter-spacing: -0.5px;
+        }
+
+        /* Container Principal Mobile */
+        .container-mobile {
+            flex: 1;
+            padding: 1rem 1.5rem 3rem 1.5rem;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* Botões Ghost e Áreas de Toque Expandidas */
+        .btn-ghost-mobile {
+            display: block;
+            width: 100%;
+            background-color: transparent;
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            color: var(--texto-claro);
+            padding: 1.2rem;
+            margin-bottom: 1rem;
+            border-radius: 40px;
+            font-family: var(--fonte-principal);
+            font-size: 1.1rem;
+            font-weight: 400;
+            text-align: center;
+            text-decoration: none;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-sizing: border-box;
+            transition: background-color 0.3s ease;
+        }
+
+        .btn-ghost-mobile:active {
+            background-color: rgba(255, 255, 255, 0.2); /* Feedback visual na tela touch */
+        }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body>
+    {% block header %}
+    <header class="header-mobile">
+        <a href="/" class="marca-mygym">MyGym</a>
+    </header>
+    {% endblock %}
+
+    <main class="container-mobile">
+        {% block content %}{% endblock %}
+    </main>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

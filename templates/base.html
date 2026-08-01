@@ -1,0 +1,286 @@
+{# 
+==============================================================================
+PROJETO: MyGym
+MÓDULO: templates/base.html
+DATA DE CRIAÇÃO: 26/07/30
+TÍTULO: Layout Mestre (Desktop)
+FUNÇÃO: Esqueleto principal do sistema, mantendo a identidade visual original e o Design System.
+
+HISTÓRICO DE ALTERAÇÕES:
+26/07/30: Criação do layout mestre desktop, respeitando 100% do CSS original.
+26/07/30: Implementação de menu dropdown no Backoffice com controle Jinja2.
+26/07/30: Migração dos estilos do Modal e Botões para a folha global; ajuste para 8px.
+26/07/30: Inclusão do FontAwesome (ícones) e estilos globais para radio buttons e senhas com ícone.
+31/07/26: Ocultação do menu Backoffice na barra de navegação para usuários não logados e atualização de rota.
+01/08/26: Remoção do menu Backoffice para centralização das regras no cover.html.
+============================================================================== 
+#}
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyGym - Boas-vindas</title>
+    
+    <!-- Fontes Poppins e Ícones FontAwesome -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,600;0,800;1,300;1,800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* Paleta de Cores e Variáveis Originais */
+        :root {
+            --fundo-gradiente-1: #002B49; 
+            --fundo-gradiente-2: #80D5C9; 
+            --texto-principal: #2C3E50;
+            --fonte-principal: 'Poppins', sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: var(--fonte-principal);
+            background: linear-gradient(to bottom, var(--fundo-gradiente-1) 0%, var(--fundo-gradiente-2) 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--texto-principal);
+            overflow: hidden; 
+        }
+
+        /* Navegação Superior Esquerda Original */
+        .top-nav {
+            position: absolute;
+            top: 2rem;
+            left: 2.5rem;
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+
+        .top-nav a {
+            color: #ffffff;
+            text-decoration: none;
+            font-size: 1rem;
+            font-weight: 400;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: color 0.3s ease;
+        }
+
+        .top-nav a:hover {
+            color: #48C9B0; 
+        }
+
+        /* Estrutura do Dropdown embutida no layout */
+        .dropdown {
+            position: relative;
+            display: inline-block;
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background-color: #002B49; 
+            min-width: 200px;
+            box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+            z-index: 1;
+            padding: 0.5rem 0;
+            border-radius: 0 0 8px 8px; 
+        }
+
+        .dropdown:hover .dropdown-content {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .dropdown-content a {
+            padding: 0.8rem 1.5rem;
+            text-transform: none; 
+            font-size: 0.95rem;
+            letter-spacing: normal;
+        }
+
+        /* --- DESIGN SYSTEM GLOBAL: MODAIS E BOTÕES --- */
+        
+        .modal-overlay {
+            display: none; 
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6); 
+            z-index: 1000; 
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(5px); 
+        }
+
+        .modal-content {
+            background-color: #001524; 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            padding: 2.5rem 2.5rem;
+            border-radius: 8px; 
+            width: 100%;
+            max-width: 380px;
+            box-shadow: 0px 15px 35px rgba(0, 0, 0, 0.5);
+            position: relative;
+            text-align: center;
+            color: #FFFFFF;
+        }
+
+        .btn-fechar {
+            position: absolute;
+            top: 1rem;
+            right: 1.5rem;
+            font-size: 1.8rem;
+            color: #FFFFFF;
+            cursor: pointer;
+            background: none;
+            border: none;
+            opacity: 0.6;
+            transition: opacity 0.3s ease;
+        }
+
+        .btn-fechar:hover {
+            opacity: 1;
+        }
+
+        .modal-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 2rem;
+            margin-top: 0;
+            letter-spacing: 1px;
+        }
+
+        .form-group {
+            margin-bottom: 1.2rem;
+            text-align: left;
+            position: relative; /* Necessário para posicionar o ícone dentro do input */
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.9rem 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background-color: rgba(255, 255, 255, 0.05); 
+            border-radius: 6px; 
+            color: #FFFFFF;
+            font-family: var(--fonte-principal);
+            font-size: 1rem;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
+        }
+
+        .form-control::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #80D5C9;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Estrutura para os Ícones de Senha (Olho) */
+        .icone-senha {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            cursor: pointer;
+            transition: color 0.3s ease;
+        }
+
+        .icone-senha:hover {
+            color: #80D5C9;
+        }
+
+        /* Estrutura para os Radio Buttons (Bolinhas de Seleção) */
+        .radio-group {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            padding: 0 0.5rem;
+        }
+
+        .radio-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.8);
+            cursor: pointer;
+        }
+
+        .radio-item input[type="radio"] {
+            accent-color: #80D5C9; /* Cor da bolinha quando selecionada */
+            transform: scale(1.2);
+            cursor: pointer;
+        }
+
+        /* Botão Padrão de Ação */
+        .btn-acao {
+            width: 100%;
+            background-color: #80D5C9; 
+            color: #002B49;
+            border: none;
+            padding: 1rem;
+            border-radius: 8px; 
+            font-family: var(--fonte-principal);
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 1rem;
+            margin-bottom: 1.5rem;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .btn-acao:hover {
+            background-color: #ffffff;
+            opacity: 0.9;
+        }
+
+        .modal-links {
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+            font-size: 0.9rem;
+        }
+
+        .modal-links a {
+            color: #80D5C9;
+            text-decoration: none;
+            transition: opacity 0.3s ease;
+            cursor: pointer;
+        }
+
+        .modal-links a:hover {
+            opacity: 0.8;
+            text-decoration: underline;
+        }
+    </style>
+    {% block head %}{% endblock %}
+</head>
+<body>
+
+    <!-- Navegação Topo Esquerdo -->
+    <nav class="top-nav" id="menuSuperior">
+        {% block nav_links %}{% endblock %}
+    </nav>
+
+    {% block content %}{% endblock %}
+
+</body>
+</html>

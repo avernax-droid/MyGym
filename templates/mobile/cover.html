@@ -1,0 +1,123 @@
+{#
+==============================================================================
+PROJETO: MyGym
+MÓDULO: cover.html (Mobile)
+DATA DE CRIAÇÃO: 26/07/29
+TÍTULO: Página de Boas-vindas (Capa - Versão Mobile)
+FUNÇÃO: Apresentar a interface inicial adaptada para dispositivos móveis.
+
+HISTÓRICO DE ALTERAÇÕES:
+29/07/26: Criação do módulo específico para mobile; ajuste de tipografia e layout flexível focado em usabilidade touch.
+30/07/26: Remoção da opção "Backoffice" do menu de acesso (opção exclusiva para desktop).
+============================================================================== 
+#}
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyGym - Boas-vindas</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,600;0,800;1,300;1,800&display=swap" rel="stylesheet">
+    <style>
+        /* Paleta de Cores e Variáveis */
+        :root {
+            --fundo-gradiente-1: #002B49; 
+            --fundo-gradiente-2: #80D5C9; 
+            --texto-principal: #2C3E50;   
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(to bottom, var(--fundo-gradiente-1) 0%, var(--fundo-gradiente-2) 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: var(--texto-principal);
+        }
+
+        /* Elemento Central - Flexível para Mobile */
+        .container {
+            padding: 2rem 1.5rem;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* Título reduzido para não estourar a tela */
+        h1 {
+            font-weight: 300;
+            font-style: italic;
+            font-size: 4rem; 
+            margin-bottom: 0.5rem;
+            color: var(--texto-principal);
+            letter-spacing: -0.5px;
+            margin-top: 0;
+        }
+
+        h1 strong {
+            font-weight: 800; 
+            color: #002B49; 
+        }
+
+        /* Texto livre para quebrar linhas na tela estreita */
+        p {
+            font-weight: 400; 
+            font-size: 1.1rem;
+            color: #FFFFFF; 
+            margin-bottom: 3rem; 
+            line-height: 1.6;
+        }
+
+        /* Navegação Empilhada e Expandida para o Toque */
+        .mobile-nav {
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+            width: 100%;
+            max-width: 300px; /* Mantém uma largura elegante em celulares maiores */
+        }
+
+        .mobile-nav a {
+            color: #ffffff;
+            text-decoration: none;
+            font-size: 1.1rem;
+            font-weight: 400;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            padding: 1.2rem; /* Área de clique (touch) bem espaçosa */
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 40px;
+            transition: background-color 0.3s ease;
+        }
+
+        .mobile-nav a:active {
+            background-color: rgba(255, 255, 255, 0.15); /* Feedback visual ao tocar */
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Título -->
+        <h1><strong>MyGym</strong></h1>
+        <!-- Descrição -->
+        <p>Gestão e acompanhamento pedagógico para esportes aquáticos.</p>
+        
+        <!-- Opções de Acesso Empilhadas -->
+        <nav class="mobile-nav">
+            <a href="#">Professor</a>
+            <a href="#">Aluno</a>
+        </nav>
+    </div>
+
+</body>
+</html>

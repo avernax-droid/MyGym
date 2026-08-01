@@ -1,0 +1,304 @@
+{#
+==============================================================================
+PROJETO: MyGym
+MÓDULO: cover.html
+DATA DE CRIAÇÃO: 26/07/29
+TÍTULO: Página de Boas-vindas (Capa)
+FUNÇÃO: Apresentar a interface inicial, modais de login, primeiro acesso e recuperação de senha.
+
+HISTÓRICO DE ALTERAÇÕES:
+26/07/30: Ajuste para herdar o base.html mantendo a formatação.
+26/07/30: Inclusão do botão "INICIAR" e Modal de Login.
+26/07/30: Adição do Modal de Primeiro Acesso (Cadastro).
+26/07/30: Adição do Modal de Recuperação de Senha.
+26/07/30: Correção do vazamento (overflow) do texto de aviso anulando o nowrap global.
+31/07/26: Inclusão de condição Jinja para liberar o clique no menu superior caso o usuário esteja logado.
+01/08/26: Inclusão do Backoffice no bloco nav_links e controle de href/tabindex para bloqueio antes do login.
+============================================================================== 
+#}
+
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+    {% if not session.get('perfil') %}
+    #menuSuperior {
+        pointer-events: none;
+        opacity: 0.4;
+    }
+    {% endif %}
+
+    .container {
+        padding: 0;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    h1 {
+        font-weight: 300;
+        font-style: italic;
+        font-size: 6rem; 
+        margin-bottom: 0.5rem;
+        color: var(--texto-principal);
+        letter-spacing: -0.5px;
+        margin-top: 0;
+    }
+
+    h1 strong {
+        font-weight: 800; 
+        color: #002B49; 
+    }
+
+    p {
+        font-weight: 400; 
+        font-size: 1.1rem;
+        color: #FFFFFF; 
+        margin-bottom: 0; 
+        line-height: 1.6;
+        white-space: nowrap; /* Esta regra mantém o subtítulo em uma linha */
+    }
+
+    .btn-iniciar-capa {
+        position: absolute;
+        bottom: 2rem;
+        right: 2.5rem;
+        width: auto;
+        padding: 0.8rem 2.5rem;
+        box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Estilo ajustado para o texto de aviso (Correção do sangramento) */
+    .aviso-texto {
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.6);
+        margin-top: -0.5rem; 
+        margin-bottom: 1.5rem;
+        line-height: 1.4;
+        text-align: center;
+        white-space: normal; /* AQUI ESTÁ A CORREÇÃO: anula o nowrap e permite a quebra de texto */
+    }
+</style>
+{% endblock %}
+
+{% block nav_links %}
+    {% if session.get('perfil') %}
+        <div class="dropdown">
+            <a href="#" class="dropbtn">Backoffice</a>
+            <div class="dropdown-content">
+                <a href="/backoffice/funcionarios/novo">Cadastro de Funcionários</a>
+            </div>
+        </div>
+        <a href="#">Professor</a>
+        <a href="#">Aluno</a>
+    {% else %}
+        <!-- Links desabilitados para navegação via teclado e mouse antes do login -->
+        <a tabindex="-1">Backoffice</a>
+        <a tabindex="-1">Professor</a>
+        <a tabindex="-1">Aluno</a>
+    {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1><strong>MyGym</strong></h1>
+    <p>Gestão e acompanhamento pedagógico para esportes aquáticos.</p>
+</div>
+
+<!-- Botão INICIAR -->
+<button id="btnAbrirLogin" class="btn-acao btn-iniciar-capa">Iniciar</button>
+
+<!-- ========================================== -->
+<!-- MODAL 1: LOGIN -->
+<!-- ========================================== -->
+<div id="modalLogin" class="modal-overlay">
+    <div class="modal-content">
+        <button class="btn-fechar fechar-modal">&times;</button>
+        <h2 class="modal-title">Acesso à Plataforma</h2>
+        
+        <form action="#" method="POST">
+            <div class="form-group">
+                <input type="text" name="username" class="form-control" placeholder="Username" required>
+            </div>
+            
+            <div class="form-group">
+                <input type="password" name="password" class="form-control senha-input" placeholder="Password" required>
+                <i class="fa-regular fa-eye icone-senha alternar-senha"></i>
+            </div>
+            
+            <button type="submit" class="btn-acao">Acessar</button>
+        </form>
+        
+        <div class="modal-links">
+            <a id="linkAbrirRecuperacao">Esqueci minha senha</a>
+            <a id="linkAbrirCadastro">Primeiro Acesso? Cadastre-se</a>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- MODAL 2: CADASTRO (Primeiro Acesso) -->
+<!-- ========================================== -->
+<div id="modalCadastro" class="modal-overlay">
+    <div class="modal-content">
+        <button class="btn-fechar fechar-modal">&times;</button>
+        <h2 class="modal-title">Novo Cadastro</h2>
+        
+        <form action="#" method="POST">
+            <div class="radio-group">
+                <label class="radio-item">
+                    <input type="radio" name="perfil_acesso" value="aluno" checked> Aluno
+                </label>
+                <label class="radio-item">
+                    <input type="radio" name="perfil_acesso" value="professor"> Professor
+                </label>
+                <label class="radio-item">
+                    <input type="radio" name="perfil_acesso" value="funcionario"> Funcionário
+                </label>
+            </div>
+
+            <div class="form-group">
+                <input type="text" name="nome_completo" class="form-control" placeholder="Nome Completo" required>
+            </div>
+
+            <div class="form-group">
+                <input type="text" name="novo_username" class="form-control" placeholder="Username" required>
+            </div>
+            
+            <div class="form-group">
+                <input type="password" name="nova_senha" class="form-control senha-input" placeholder="Senha" required>
+                <i class="fa-regular fa-eye icone-senha alternar-senha"></i>
+            </div>
+
+            <div class="form-group">
+                <input type="password" name="confirma_senha" class="form-control senha-input" placeholder="Confirmar Senha" required>
+                <i class="fa-regular fa-eye icone-senha alternar-senha"></i>
+            </div>
+            
+            <button type="submit" class="btn-acao">Confirmar</button>
+        </form>
+        
+        <div class="modal-links">
+            <a id="linkVoltarLoginCad">Já tenho acesso. Entrar</a>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- MODAL 3: RECUPERAÇÃO DE SENHA -->
+<!-- ========================================== -->
+<div id="modalRecuperacao" class="modal-overlay">
+    <div class="modal-content">
+        <button class="btn-fechar fechar-modal">&times;</button>
+        <h2 class="modal-title">Recuperar Senha</h2>
+        
+        <form action="#" method="POST">
+            <div class="radio-group">
+                <label class="radio-item">
+                    <input type="radio" name="perfil_recuperacao" value="aluno" checked> Aluno
+                </label>
+                <label class="radio-item">
+                    <input type="radio" name="perfil_recuperacao" value="professor"> Professor
+                </label>
+                <label class="radio-item">
+                    <input type="radio" name="perfil_recuperacao" value="funcionario"> Funcionário
+                </label>
+            </div>
+
+            <div class="form-group">
+                <input type="text" name="nome_completo_recuperacao" class="form-control" placeholder="Nome Completo" required>
+            </div>
+            
+            <button type="submit" class="btn-acao" style="margin-bottom: 1rem;">Enviar Senha Provisória</button>
+            
+            <!-- Aviso com a correção do CSS (white-space: normal) -->
+            <p class="aviso-texto">
+                <i class="fa-solid fa-circle-info" style="margin-right: 5px;"></i>
+                A senha provisória será enviada para o e-mail cadastrado em nossa base.
+            </p>
+        </form>
+        
+        <div class="modal-links">
+            <a id="linkVoltarLoginRec">Voltar para o Login</a>
+        </div>
+    </div>
+</div>
+
+<!-- SCRIPT DE CONTROLE (Modais e Senhas) -->
+<script>
+    // Referências dos Modais
+    const modalLogin = document.getElementById('modalLogin');
+    const modalCadastro = document.getElementById('modalCadastro');
+    const modalRecuperacao = document.getElementById('modalRecuperacao');
+    
+    // Referências dos Gatilhos (Links e Botões)
+    const btnAbrirLogin = document.getElementById('btnAbrirLogin');
+    const linkAbrirCadastro = document.getElementById('linkAbrirCadastro');
+    const linkAbrirRecuperacao = document.getElementById('linkAbrirRecuperacao');
+    const linkVoltarLoginCad = document.getElementById('linkVoltarLoginCad');
+    const linkVoltarLoginRec = document.getElementById('linkVoltarLoginRec');
+    
+    const btnsFechar = document.querySelectorAll('.fechar-modal');
+
+    // Navegação entre as janelas
+    btnAbrirLogin.addEventListener('click', () => {
+        modalLogin.style.display = 'flex';
+    });
+
+    linkAbrirCadastro.addEventListener('click', () => {
+        modalLogin.style.display = 'none';
+        modalCadastro.style.display = 'flex';
+    });
+
+    linkAbrirRecuperacao.addEventListener('click', () => {
+        modalLogin.style.display = 'none';
+        modalRecuperacao.style.display = 'flex';
+    });
+
+    linkVoltarLoginCad.addEventListener('click', () => {
+        modalCadastro.style.display = 'none';
+        modalLogin.style.display = 'flex';
+    });
+
+    linkVoltarLoginRec.addEventListener('click', () => {
+        modalRecuperacao.style.display = 'none';
+        modalLogin.style.display = 'flex';
+    });
+
+    // Fecha Modais pelo (X)
+    btnsFechar.forEach(btn => {
+        btn.addEventListener('click', () => {
+            modalLogin.style.display = 'none';
+            modalCadastro.style.display = 'none';
+            modalRecuperacao.style.display = 'none';
+        });
+    });
+
+    // Fecha clicando no fundo desfocado
+    window.addEventListener('click', (e) => {
+        if (e.target === modalLogin) modalLogin.style.display = 'none';
+        if (e.target === modalCadastro) modalCadastro.style.display = 'none';
+        if (e.target === modalRecuperacao) modalRecuperacao.style.display = 'none';
+    });
+
+    // Controle do Ícone de Olho (Revelar Senha)
+    const iconesSenha = document.querySelectorAll('.alternar-senha');
+
+    iconesSenha.forEach(icone => {
+        icone.addEventListener('click', function() {
+            const input = this.previousElementSibling;
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                this.classList.remove('fa-eye');
+                this.classList.add('fa-eye-slash'); 
+            } else {
+                input.type = 'password';
+                this.classList.remove('fa-eye-slash');
+                this.classList.add('fa-eye'); 
+            }
+        });
+    });
+</script>
+{% endblock %}
