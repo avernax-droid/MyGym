@@ -14,6 +14,8 @@ HISTÓRICO DE ALTERAÇÕES:
 26/07/30: Correção do vazamento (overflow) do texto de aviso anulando o nowrap global.
 31/07/26: Inclusão de condição Jinja para liberar o clique no menu superior caso o usuário esteja logado.
 01/08/26: Inclusão do Backoffice no bloco nav_links e controle de href/tabindex para bloqueio antes do login.
+01/08/26: Aplicação de estilos inline (!important) nos links desabilitados para sobrepor regras do base.html.
+01/08/26: Renderização condicional para substituir botão "Iniciar" pelo botão "EXIT" com chamada de logout; tratamento no JS.
 ============================================================================== 
 #}
 
@@ -21,13 +23,6 @@ HISTÓRICO DE ALTERAÇÕES:
 
 {% block head %}
 <style>
-    {% if not session.get('perfil') %}
-    #menuSuperior {
-        pointer-events: none;
-        opacity: 0.4;
-    }
-    {% endif %}
-
     .container {
         padding: 0;
         text-align: center;
@@ -93,10 +88,10 @@ HISTÓRICO DE ALTERAÇÕES:
         <a href="#">Professor</a>
         <a href="#">Aluno</a>
     {% else %}
-        <!-- Links desabilitados para navegação via teclado e mouse antes do login -->
-        <a tabindex="-1">Backoffice</a>
-        <a tabindex="-1">Professor</a>
-        <a tabindex="-1">Aluno</a>
+        <!-- Links desabilitados para navegação via teclado, mouse e com visibilidade reduzida antes do login (inline styles para sobrepor base.html) -->
+        <a tabindex="-1" style="opacity: 0.4 !important; pointer-events: none !important; cursor: default !important;">Backoffice</a>
+        <a tabindex="-1" style="opacity: 0.4 !important; pointer-events: none !important; cursor: default !important;">Professor</a>
+        <a tabindex="-1" style="opacity: 0.4 !important; pointer-events: none !important; cursor: default !important;">Aluno</a>
     {% endif %}
 {% endblock %}
 
@@ -106,8 +101,12 @@ HISTÓRICO DE ALTERAÇÕES:
     <p>Gestão e acompanhamento pedagógico para esportes aquáticos.</p>
 </div>
 
-<!-- Botão INICIAR -->
-<button id="btnAbrirLogin" class="btn-acao btn-iniciar-capa">Iniciar</button>
+<!-- Condicional do Botão INICIAR / EXIT -->
+{% if not session.get('perfil') %}
+    <button id="btnAbrirLogin" class="btn-acao btn-iniciar-capa">Iniciar</button>
+{% else %}
+    <button onclick="window.location.href='/logout'" class="btn-acao btn-iniciar-capa">EXIT</button>
+{% endif %}
 
 <!-- ========================================== -->
 <!-- MODAL 1: LOGIN -->
@@ -242,9 +241,12 @@ HISTÓRICO DE ALTERAÇÕES:
     const btnsFechar = document.querySelectorAll('.fechar-modal');
 
     // Navegação entre as janelas
-    btnAbrirLogin.addEventListener('click', () => {
-        modalLogin.style.display = 'flex';
-    });
+    // Tratamento com if(btnAbrirLogin) para evitar erros caso o usuário esteja logado e o botão INICIAR não exista
+    if (btnAbrirLogin) {
+        btnAbrirLogin.addEventListener('click', () => {
+            modalLogin.style.display = 'flex';
+        });
+    }
 
     linkAbrirCadastro.addEventListener('click', () => {
         modalLogin.style.display = 'none';

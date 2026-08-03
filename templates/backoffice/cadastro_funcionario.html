@@ -12,6 +12,8 @@
 # 31/07/26: Ajustes de usabilidade: expansão do campo e-mail, máscara de WhatsApp, navegação por Enter,
 #           validação dinâmica do botão Salvar e alertas visuais para campos incorretos/vazios.
 # 31/07/26: Substituição do cargo por lista vertical suspensa contendo as opções e o item "Outros".
+# 01/08/26: Inclusão do sistema de busca assíncrona (AJAX) para auto-preenchimento por nome.
+# 03/08/26: Alteração na máscara de WhatsApp para formatar apenas no blur, manter limpo no focus/submit e lidar com preenchimento prévio/AJAX.
 # ============================================================================== #}
 
 {% extends "base.html" %}
@@ -238,13 +240,41 @@
         const btnSalvar = document.getElementById("btnSalvar");
         const inputTelefone = document.getElementById("telefone");
         const inputEmail = document.getElementById("email");
+        const inputNomeCompleto = document.getElementById("nome_completo");
+        const selectCargo = document.getElementById("cargo");
+        const selectStatus = document.getElementById("status");
+
+        // Funções para manipulação da máscara do WhatsApp
+        function aplicarMascaraTelefone(input) {
+            let valor = input.value.replace(/\D/g, "");
+            if (valor.length === 0) return;
+            if (valor.length > 11) valor = valor.slice(0, 11);
+            
+            if (valor.length > 6) {
+                valor = `(${valor.slice(0, 2)}) ${valor.slice(2, 7)}-${valor.slice(7)}`;
+            } else if (valor.length > 2) {
+                valor = `(${valor.slice(0, 2)}) ${valor.slice(2)}`;
+            } else if (valor.length > 0) {
+                valor = `(${valor}`;
+            }
+            input.value = valor;
+        }
+
+        function removerMascaraTelefone(input) {
+            input.value = input.value.replace(/\D/g, "");
+        }
+
+        // Aplica a máscara caso a tela carregue com dados (Edição de registro existente)
+        if (inputTelefone.value) {
+            aplicarMascaraTelefone(inputTelefone);
+        }
 
         // 1. Navegação por ENTER simulando o TAB nos inputs principais
         const elementosNavegacao = [
-            document.getElementById("nome_completo"), 
+            inputNomeCompleto, 
             inputEmail, 
             inputTelefone, 
-            document.getElementById("cargo")
+            selectCargo
         ];
 
         elementosNavegacao.forEach((elemento, index) => {
@@ -261,20 +291,21 @@
             });
         });
 
-        // 2. Máscara automática para WhatsApp (XX) XXXXX-XXXX
+        // 2. Eventos da Máscara do Telefone (Focus, Input, Blur)
+        inputTelefone.addEventListener("focus", function(e) {
+            removerMascaraTelefone(e.target);
+        });
+
         inputTelefone.addEventListener("input", function(e) {
+            // Mantém apenas números na digitação e restringe a 11 caracteres
             let valor = e.target.value.replace(/\D/g, "");
             if (valor.length > 11) valor = valor.slice(0, 11);
-            
-            if (valor.length > 6) {
-                valor = `(${valor.slice(0, 2)}) ${valor.slice(2, 7)}-${valor.slice(7)}`;
-            } else if (valor.length > 2) {
-                valor = `(${valor.slice(0, 2)}) ${valor.slice(2)}`;
-            } else if (valor.length > 0) {
-                valor = `(${valor}`;
-            }
             e.target.value = valor;
             validarFormulario();
+        });
+
+        inputTelefone.addEventListener("blur", function(e) {
+            aplicarMascaraTelefone(e.target);
         });
 
         // Validação estrutural básica de e-mail
@@ -323,6 +354,36 @@
             });
         });
 
+        // 4. Integração AJAX para auto-preenchimento ao sair (blur) do campo Nome Completo
+        inputNomeCompleto.addEventListener("blur", function() {
+            const nome = this.value.trim();
+            if (nome === "") return;
+
+            fetch(`/api/funcionarios/buscar?nome=${encodeURIComponent(nome)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.encontrado) {
+                        inputEmail.value = data.dados.email || "";
+                        inputTelefone.value = data.dados.telefone || "";
+                        
+                        if (data.dados.cargo) {
+                            selectCargo.value = data.dados.cargo;
+                        }
+                        
+                        if (data.dados.status) {
+                            selectStatus.value = data.dados.status;
+                        }
+
+                        // Aplica a formatação do telefone após o retorno do AJAX
+                        aplicarMascaraTelefone(inputTelefone);
+
+                        // Força a validação após o preenchimento para habilitar o botão
+                        validarFormulario();
+                    }
+                })
+                .catch(error => console.error("Erro ao buscar funcionário:", error));
+        });
+
         // Validação final ao tentar submeter
         form.addEventListener("submit", function(e) {
             let valido = true;
@@ -336,6 +397,9 @@
 
             if (!valido) {
                 e.preventDefault();
+            } else {
+                // Remove a formatação do telefone antes de salvar no Banco de Dados
+                removerMascaraTelefone(inputTelefone);
             }
         });
     });

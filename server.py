@@ -11,10 +11,12 @@
 # 31/07/26: Inclusão da rota /backoffice/funcionarios/novo para exibir o formulário de cadastro.
 # 31/07/26: Ajuste na rota raiz (index) para aceitar requisições POST e validar o login master.
 # 31/07/26: Integração com o arquivo .env e criação da rota POST para salvar funcionários no banco de dados.
+# 01/08/26: Criação da rota /logout para encerramento de sessão e limpeza de cookies.
+# 01/08/26: Criação da rota /api/funcionarios/buscar para auto-preenchimento AJAX via Nome Completo.
 # ==============================================================================
 
 import os
-from flask import Flask, render_template, request, session, redirect, url_for
+from flask import Flask, render_template, request, session, redirect, url_for, jsonify
 from dotenv import load_dotenv
 import re
 
@@ -73,6 +75,14 @@ def index():
         # Renderiza o cover do desktop que herda o base.html e injeta o conteúdo central
         return render_template('cover.html')
 
+@app.route('/logout')
+def logout():
+    """
+    Rota responsável por encerrar a sessão do usuário, limpando os cookies e redirecionando para a capa.
+    """
+    session.clear()
+    return redirect(url_for('index'))
+
 @app.route('/toggle-admin')
 def toggle_admin():
     """
@@ -86,6 +96,42 @@ def toggle_admin():
         session['perfil'] = 'admin' # Define o perfil como administrador master
         
     return redirect(url_for('index'))
+
+@app.route('/api/funcionarios/buscar', methods=['GET'])
+def buscar_funcionario():
+    """
+    Rota API para buscar um funcionário pelo nome completo.
+    Retorna JSON com os dados caso encontrado.
+    """
+    nome = request.args.get('nome')
+    if not nome:
+        return jsonify({'encontrado': False})
+
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            sql = "SELECT email, telefone, cargo, status FROM funcionarios WHERE nome_completo = %s LIMIT 1"
+            cursor.execute(sql, (nome,))
+            row = cursor.fetchone()
+            
+            if row:
+                return jsonify({
+                    'encontrado': True,
+                    'dados': {
+                        'email': row[0],
+                        'telefone': row[1],
+                        'cargo': row[2],
+                        'status': row[3]
+                    }
+                })
+        except Exception as e:
+            print(f"Erro ao buscar funcionário via API: {e}")
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return jsonify({'encontrado': False})
 
 @app.route('/backoffice/funcionarios/novo')
 def novo_funcionario():
