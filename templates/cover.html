@@ -16,6 +16,9 @@ HISTÓRICO DE ALTERAÇÕES:
 01/08/26: Inclusão do Backoffice no bloco nav_links e controle de href/tabindex para bloqueio antes do login.
 01/08/26: Aplicação de estilos inline (!important) nos links desabilitados para sobrepor regras do base.html.
 01/08/26: Renderização condicional para substituir botão "Iniciar" pelo botão "EXIT" com chamada de logout; tratamento no JS.
+03/08/26: Alteração do action no Modal de Cadastro para apontar para a rota /cadastrar_usuario.
+03/08/26: Inclusão de verificação Jinja no script para abrir o modal de login automaticamente após cadastro.
+03/08/26: Inclusão de alerta de erro e reabertura do modal caso o cadastro seja inválido.
 ============================================================================== 
 #}
 
@@ -116,7 +119,7 @@ HISTÓRICO DE ALTERAÇÕES:
         <button class="btn-fechar fechar-modal">&times;</button>
         <h2 class="modal-title">Acesso à Plataforma</h2>
         
-        <form action="#" method="POST">
+        <form action="/" method="POST">
             <div class="form-group">
                 <input type="text" name="username" class="form-control" placeholder="Username" required>
             </div>
@@ -144,7 +147,7 @@ HISTÓRICO DE ALTERAÇÕES:
         <button class="btn-fechar fechar-modal">&times;</button>
         <h2 class="modal-title">Novo Cadastro</h2>
         
-        <form action="#" method="POST">
+        <form action="/cadastrar_usuario" method="POST">
             <div class="radio-group">
                 <label class="radio-item">
                     <input type="radio" name="perfil_acesso" value="aluno" checked> Aluno
@@ -302,5 +305,16 @@ HISTÓRICO DE ALTERAÇÕES:
             }
         });
     });
+
+    // Abertura automática do modal de login após cadastro
+    {% if request.args.get('show_login') == 'true' %}
+        modalLogin.style.display = 'flex';
+    {% endif %}
+
+    // Exibição de aviso de erro no cadastro e reabertura do modal
+    {% if request.args.get('erro_cadastro') %}
+        alert("{{ request.args.get('erro_cadastro') }}");
+        modalCadastro.style.display = 'flex';
+    {% endif %}
 </script>
 {% endblock %}
