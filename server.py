@@ -18,9 +18,12 @@
 # 03/08/26: Atualização da rota index para validar login com banco de dados e redirect com parâmetro show_login.
 # 03/08/26: Adição de validação de existência na base (funcionarios/professores/alunos) antes de criar o usuário.
 # 03/08/26: Ajuste na validação do Professor para buscar na tabela funcionarios (Opção B) e correção de aspas na msg_erro.
+# 04/08/26: Implementação do decorador de segurança @requer_permissao e criação das rotas para o Controle de Acessos.
+# 04/08/26: Alteração na rota /api/permissoes/salvar para aplicar lógica de UPDATE caso o registro exista, ou INSERT caso contrário.
 # ==============================================================================
 
 import os
+from functools import wraps
 from flask import Flask, render_template, request, session, redirect, url_for, jsonify
 from dotenv import load_dotenv
 import re
@@ -53,6 +56,55 @@ def is_mobile(user_agent):
             return True
             
     return False
+
+def requer_permissao(modulo):
+    """
+    Decorador para proteger as rotas. Verifica se o perfil logado tem acesso ao módulo
+    especificado ou se possui a chave mestra 'mod_free'.
+    """
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            perfil = session.get('perfil')
+            
+            # Se não estiver logado, redireciona para a capa
+            if not perfil:
+                return redirect(url_for('index'))
+            
+            # O admin master tem acesso irrestrito
+            if perfil == 'admin':
+                return f(*args, **kwargs)
+            
+            conn = get_connection()
+            if conn:
+                try:
+                    cursor = conn.cursor()
+                    # Verifica se o cargo tem acesso ao módulo solicitado OU ao módulo Free
+                    sql = """
+                        SELECT pode_acessar FROM permissoes_cargo 
+                        WHERE cargo = %s AND (modulo = %s OR modulo = 'mod_free')
+                    """
+                    cursor.execute(sql, (perfil, modulo))
+                    permissoes = cursor.fetchall()
+                    
+                    tem_acesso = False
+                    for (pode_acessar,) in permissoes:
+                        if pode_acessar == 1:
+                            tem_acesso = True
+                            break
+                            
+                    if tem_acesso:
+                        return f(*args, **kwargs)
+                except Exception as e:
+                    print(f"Erro ao verificar permissão no banco: {e}")
+                finally:
+                    cursor.close()
+                    conn.close()
+
+            # Se não tiver acesso, bloqueia e retorna para a home
+            return redirect(url_for('index'))
+        return decorated_function
+    return decorator
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -156,7 +208,6 @@ def cadastrar_usuario():
                     cursor.execute(sql_check, (nome_completo,))
                     existe = cursor.fetchone()
                     if not existe:
-                        # Removidas as aspas simples ao redor de {nome_completo} para evitar erro visual no JavaScript
                         msg_erro = f"{perfil.capitalize()} {nome_completo} não encontrado(a) na base de dados do sistema."
                         return redirect(url_for('index', erro_cadastro=msg_erro))
                 except Exception as e:
@@ -226,6 +277,7 @@ def buscar_funcionario():
     return jsonify({'encontrado': False})
 
 @app.route('/backoffice/funcionarios/novo')
+@requer_permissao('mod_cad_func')
 def novo_funcionario():
     """
     Rota para exibir o formulário de cadastro de novos funcionários no backoffice.
@@ -233,6 +285,7 @@ def novo_funcionario():
     return render_template('backoffice/cadastro_funcionario.html')
 
 @app.route('/backoffice/funcionarios/salvar', methods=['POST'])
+@requer_permissao('mod_cad_func')
 def salvar_funcionario():
     """
     Rota responsável por receber os dados do formulário, verificar se possui ID 
@@ -276,6 +329,92 @@ def salvar_funcionario():
             conn.close()
             
     return redirect(url_for('novo_funcionario'))
+
+# ==============================================================================
+# ROTAS DO CONTROLE DE ACESSOS E PERMISSÕES
+# ==============================================================================
+
+@app.route('/backoffice/permissoes')
+@requer_permissao('mod_cad_perm')
+def controles_de_acesso():
+    """
+    Renderiza a interface do Controle de Acessos.
+    """
+    return render_template('backoffice/permissoes.html')
+
+@app.route('/api/permissoes/buscar', methods=['GET'])
+def buscar_permissoes():
+    """
+    Rota API que busca no banco de dados todas as permissões cadastradas para um cargo específico.
+    """
+    cargo = request.args.get('cargo')
+    if not cargo:
+        return jsonify({'sucesso': False, 'msg': 'Cargo não informado.'})
+    
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            sql = "SELECT modulo, pode_acessar FROM permissoes_cargo WHERE cargo = %s"
+            cursor.execute(sql, (cargo,))
+            rows = cursor.fetchall()
+            
+            # Monta um dicionário com os módulos (ex: {'mod_free': 1, 'mod_cad_func': 0})
+            permissoes = {row[0]: row[1] for row in rows}
+            
+            return jsonify({'sucesso': True, 'permissoes': permissoes})
+        except Exception as e:
+            print(f"Erro ao buscar permissões via API: {e}")
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return jsonify({'sucesso': False})
+
+@app.route('/api/permissoes/salvar', methods=['POST'])
+@requer_permissao('mod_cad_perm')
+def salvar_permissoes():
+    """
+    Rota API que recebe um JSON com o cargo e a matriz de permissões 
+    para gravar na tabela permissoes_cargo (via UPDATE ou INSERT).
+    """
+    dados = request.get_json()
+    cargo = dados.get('cargo')
+    permissoes = dados.get('permissoes') # Dicionário de módulos e valores (1 ou 0)
+    
+    if not cargo or not permissoes:
+        return jsonify({'sucesso': False, 'msg': 'Dados incompletos.'})
+        
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            
+            # Percorre cada permissão enviada da tela
+            for modulo, valor in permissoes.items():
+                # Verifica se a regra de permissão para este cargo e módulo já existe
+                cursor.execute("SELECT id FROM permissoes_cargo WHERE cargo = %s AND modulo = %s", (cargo, modulo))
+                registro = cursor.fetchone()
+                
+                if registro:
+                    # Se existe, atualiza o valor
+                    sql_update = "UPDATE permissoes_cargo SET pode_acessar = %s WHERE id = %s"
+                    cursor.execute(sql_update, (valor, registro[0]))
+                else:
+                    # Se não existe, cria o novo registro
+                    sql_insert = "INSERT INTO permissoes_cargo (cargo, modulo, pode_acessar) VALUES (%s, %s, %s)"
+                    cursor.execute(sql_insert, (cargo, modulo, valor))
+            
+            conn.commit()
+            return jsonify({'sucesso': True})
+        except Exception as e:
+            print(f"Erro ao salvar permissões no banco: {e}")
+            conn.rollback()
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return jsonify({'sucesso': False})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

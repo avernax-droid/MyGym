@@ -1,0 +1,461 @@
+{# ==============================================================================
+# PROJETO: MyGym
+# MÓDULO: templates/backoffice/permissoes.html
+# DATA DE CRIAÇÃO: 04/08/26
+# TÍTULO: Controle de Acessos
+# FUNÇÃO: Interface para gerenciamento da tabela permissoes_cargo. Permite 
+#         selecionar um cargo e definir "SIM" ou "NÃO" para o acesso a cada módulo.
+#
+# HISTÓRICO DE ALTERAÇÕES:
+# 04/08/26: Criação da interface com lista vertical de cargos e matriz de permissões.
+# 04/08/26: Integração do JavaScript (AJAX) com as rotas reais do backend.
+# 04/08/26: Compactação de layout para evitar rolagem, botão renomeado para "Salvar", 
+#           remoção do texto de overlay e adição do botão "X" de fechamento.
+# 04/08/26: Adição da rotina de limpeza de tela (reset visual e overlay) após o salvamento com sucesso.
+# ============================================================================== #}
+
+{% extends "base.html" %}
+
+{% block title %}Controle de Acessos - MyGym{% endblock %}
+
+{% block head %}
+<style>
+    .container-permissoes {
+        background-color: #001524;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 1.5rem 2.5rem; 
+        border-radius: 8px;
+        width: 100%;
+        max-width: 900px;
+        box-shadow: 0px 15px 35px rgba(0, 0, 0, 0.5);
+        color: #FFFFFF;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem; 
+        position: relative; 
+    }
+
+    .btn-fechar-painel {
+        position: absolute;
+        top: 1rem;
+        right: 1.5rem;
+        font-size: 1.8rem;
+        color: #FFFFFF;
+        text-decoration: none;
+        opacity: 0.6;
+        transition: opacity 0.3s ease;
+    }
+
+    .btn-fechar-painel:hover {
+        opacity: 1;
+    }
+
+    .header-pagina {
+        text-align: center;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 0.8rem; 
+    }
+
+    .header-pagina h1 {
+        font-size: 1.5rem; 
+        font-weight: 800;
+        font-style: italic;
+        margin: 0 0 0.2rem 0;
+        letter-spacing: 1px;
+        color: #FFFFFF;
+    }
+
+    .header-pagina p {
+        margin: 0;
+        font-size: 0.9rem; 
+        color: rgba(255, 255, 255, 0.7);
+    }
+
+    .layout-duas-colunas {
+        display: flex;
+        gap: 3rem;
+    }
+
+    .coluna-cargos {
+        flex: 1;
+        min-width: 250px;
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+        padding-right: 2rem;
+    }
+
+    .coluna-cargos h2 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-top: 0;
+        margin-bottom: 1rem;
+        color: #80D5C9;
+    }
+
+    .lista-cargos {
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem; 
+    }
+
+    .radio-cargo-wrapper .radio-item {
+        font-size: 1rem;
+        color: #FFFFFF;
+        padding: 0.4rem;
+        border-radius: 6px;
+        transition: background-color 0.2s ease;
+    }
+
+    .radio-cargo-wrapper .radio-item:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+    }
+    
+    .radio-cargo-wrapper input[type="radio"]:checked + span {
+        color: #80D5C9;
+        font-weight: 600;
+    }
+
+    .coluna-permissoes {
+        flex: 2;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .overlay-permissoes {
+        position: relative;
+    }
+    
+    .overlay-permissoes::after {
+        content: ""; 
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 21, 36, 0.7);
+        z-index: 10;
+        border-radius: 8px;
+    }
+
+    .overlay-permissoes.ativo::after {
+        display: none;
+    }
+
+    .lista-modulos {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem; 
+    }
+
+    .linha-modulo {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 0.4rem; 
+        border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+    }
+
+    .linha-modulo:last-child {
+        border-bottom: none;
+    }
+    
+    .linha-modulo.destaque-free {
+        background-color: rgba(128, 213, 201, 0.05);
+        padding: 0.6rem 1rem; 
+        border-radius: 6px;
+        border-bottom: none;
+        margin-bottom: 0.3rem;
+    }
+
+    .nome-modulo {
+        font-size: 0.9rem;
+        color: #FFFFFF;
+        flex: 1;
+    }
+
+    .opcoes-sim-nao {
+        display: flex;
+        gap: 1.5rem;
+        min-width: 150px;
+        justify-content: flex-end;
+    }
+
+    .opcoes-sim-nao .radio-item {
+        margin-bottom: 0;
+    }
+
+    .form-acoes {
+        display: flex;
+        gap: 1rem;
+        margin-top: 1rem; 
+        justify-content: flex-end;
+    }
+
+    .btn-custom {
+        padding: 0.8rem 2rem;
+        border-radius: 6px;
+        font-family: var(--fonte-principal);
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        text-decoration: none;
+        text-align: center;
+        transition: all 0.3s ease;
+        border: none;
+    }
+
+    .btn-salvar {
+        background-color: #80D5C9;
+        color: #002B49;
+    }
+
+    .btn-salvar:disabled {
+        background-color: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.3);
+        cursor: not-allowed;
+    }
+
+    .btn-salvar:not(:disabled):hover {
+        background-color: #ffffff;
+    }
+    
+    .status-msg {
+        display: none;
+        text-align: right;
+        margin-top: 0.5rem;
+        font-size: 0.9rem;
+    }
+    
+    .sucesso { color: #80D5C9; }
+    .erro { color: #ff6b6b; }
+
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-permissoes">
+    <a href="/" class="btn-fechar-painel" title="Fechar">&times;</a>
+
+    <header class="header-pagina">
+        <h1>CONTROLE DE ACESSOS</h1>
+        <p>Defina os módulos que cada perfil pode acessar no sistema.</p>
+    </header>
+
+    <div class="layout-duas-colunas">
+        
+        <div class="coluna-cargos">
+            <h2>Selecione o Cargo</h2>
+            <div class="lista-cargos radio-cargo-wrapper">
+                <label class="radio-item">
+                    <input type="radio" name="cargo_selecionado" value="gerente">
+                    <span>Gerente</span>
+                </label>
+                <label class="radio-item">
+                    <input type="radio" name="cargo_selecionado" value="coordenador">
+                    <span>Coordenador</span>
+                </label>
+                <label class="radio-item">
+                    <input type="radio" name="cargo_selecionado" value="professor">
+                    <span>Professor</span>
+                </label>
+                <label class="radio-item">
+                    <input type="radio" name="cargo_selecionado" value="recepcionista">
+                    <span>Recepcionista</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="coluna-permissoes overlay-permissoes" id="painelPermissoes">
+            <form id="formPermissoes">
+                <div class="lista-modulos">
+                    
+                    <div class="linha-modulo destaque-free">
+                        <span class="nome-modulo"><strong>Acesso Free</strong> (Acesso irrestrito ao sistema)</span>
+                        <div class="opcoes-sim-nao">
+                            <label class="radio-item">
+                                <input type="radio" name="mod_free" value="1" class="trigger-free"> SIM
+                            </label>
+                            <label class="radio-item">
+                                <input type="radio" name="mod_free" value="0" class="trigger-free" checked> NÃO
+                            </label>
+                        </div>
+                    </div>
+
+                    {% set modulos = [
+                        ('mod_cad_func', 'Cadastro de Funcionários'),
+                        ('mod_cad_aluno', 'Cadastro de Alunos'),
+                        ('mod_cad_resp', 'Cadastro de Responsáveis'),
+                        ('mod_cad_prof', 'Cadastro de Professores'),
+                        ('mod_cad_perm', 'Cadastro de Permissões'),
+                        ('mod_grade', 'Grade de Horários'),
+                        ('mod_area_prof', 'Área do Professor'),
+                        ('mod_finan_planos', 'Gestão de Matrículas, Planos e Financeiro')
+                    ] %}
+
+                    {% for input_name, label_text in modulos %}
+                    <div class="linha-modulo">
+                        <span class="nome-modulo">{{ label_text }}</span>
+                        <div class="opcoes-sim-nao">
+                            <label class="radio-item">
+                                <input type="radio" name="{{ input_name }}" value="1" class="perm-padrao"> SIM
+                            </label>
+                            <label class="radio-item">
+                                <input type="radio" name="{{ input_name }}" value="0" class="perm-padrao" checked> NÃO
+                            </label>
+                        </div>
+                    </div>
+                    {% endfor %}
+
+                </div>
+
+                <div class="status-msg" id="msgStatus">Configurações salvas com sucesso!</div>
+                
+                <div class="form-acoes">
+                    <button type="button" id="btnSalvar" class="btn-custom btn-salvar" disabled>Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const radiosCargos = document.querySelectorAll('input[name="cargo_selecionado"]');
+        const painelPermissoes = document.getElementById("painelPermissoes");
+        const btnSalvar = document.getElementById("btnSalvar");
+        const radiosFree = document.querySelectorAll('.trigger-free');
+        const radiosPadrao = document.querySelectorAll('.perm-padrao');
+        const msgStatus = document.getElementById('msgStatus');
+        const formPermissoes = document.getElementById('formPermissoes');
+
+        let cargoAtual = null;
+
+        radiosCargos.forEach(radio => {
+            radio.addEventListener('change', function() {
+                if (this.checked) {
+                    cargoAtual = this.value;
+                    painelPermissoes.classList.add('ativo');
+                    btnSalvar.disabled = false;
+                    msgStatus.style.display = 'none';
+                    
+                    fetch(`/api/permissoes/buscar?cargo=${cargoAtual}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            formPermissoes.reset();
+                            this.checked = true;
+                            
+                            if (data.sucesso && data.permissoes) {
+                                for (const [modulo, valor] of Object.entries(data.permissoes)) {
+                                    const radioAlvo = document.querySelector(`input[name="${modulo}"][value="${valor}"]`);
+                                    if (radioAlvo) {
+                                        radioAlvo.checked = true;
+                                    }
+                                }
+                            }
+                            lidarComAcessoFree();
+                        })
+                        .catch(error => {
+                            console.error("Erro ao buscar permissões:", error);
+                        });
+                }
+            });
+        });
+
+        function lidarComAcessoFree() {
+            const isFree = document.querySelector('input[name="mod_free"][value="1"]').checked;
+            
+            radiosPadrao.forEach(radio => {
+                if (isFree) {
+                    if (radio.value === "1") {
+                        radio.checked = true;
+                    }
+                    radio.disabled = true;
+                } else {
+                    radio.disabled = false;
+                }
+            });
+        }
+
+        radiosFree.forEach(radio => {
+            radio.addEventListener('change', lidarComAcessoFree);
+        });
+
+        btnSalvar.addEventListener('click', function() {
+            if (!cargoAtual) return;
+            
+            btnSalvar.disabled = true;
+            btnSalvar.textContent = "Salvando...";
+
+            const formData = new FormData(formPermissoes);
+            const permissoes = {};
+            
+            for (const [key, value] of formData.entries()) {
+                permissoes[key] = parseInt(value);
+            }
+
+            const payload = {
+                cargo: cargoAtual,
+                permissoes: permissoes
+            };
+
+            fetch('/api/permissoes/salvar', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.sucesso) {
+                    msgStatus.textContent = `Permissões salvas com sucesso!`;
+                    msgStatus.className = 'status-msg sucesso';
+                } else {
+                    msgStatus.textContent = "Erro ao salvar as permissões.";
+                    msgStatus.className = 'status-msg erro';
+                }
+                
+                msgStatus.style.display = 'block';
+                btnSalvar.textContent = "Salvar"; 
+                
+                // Rotina de limpeza após 2 segundos
+                setTimeout(() => {
+                    msgStatus.style.display = 'none';
+                    
+                    if (data.sucesso) {
+                        // Limpa o formulário de permissões
+                        formPermissoes.reset();
+                        
+                        // Desmarca o radio button do cargo selecionado
+                        const cargoRadio = document.querySelector(`input[name="cargo_selecionado"][value="${cargoAtual}"]`);
+                        if (cargoRadio) {
+                            cargoRadio.checked = false;
+                        }
+                        cargoAtual = null;
+                        
+                        // Ativa novamente o overlay (cortina escura)
+                        painelPermissoes.classList.remove('ativo');
+                        
+                        // Garante que o botão salvar fique desabilitado
+                        btnSalvar.disabled = true;
+                    } else {
+                        // Em caso de erro, apenas reabilita o botão para tentar de novo
+                        btnSalvar.disabled = false;
+                    }
+                }, 2000);
+            })
+            .catch(error => {
+                console.error("Erro ao salvar:", error);
+                msgStatus.textContent = "Erro de conexão ao tentar salvar.";
+                msgStatus.className = 'status-msg erro';
+                msgStatus.style.display = 'block';
+                
+                btnSalvar.textContent = "Salvar"; 
+                btnSalvar.disabled = false;
+            });
+        });
+    });
+</script>
+{% endblock %}

@@ -13,6 +13,7 @@ HISTÓRICO DE ALTERAÇÕES:
 26/07/30: Inclusão do FontAwesome (ícones) e estilos globais para radio buttons e senhas com ícone.
 31/07/26: Ocultação do menu Backoffice na barra de navegação para usuários não logados e atualização de rota.
 01/08/26: Remoção do menu Backoffice para centralização das regras no cover.html.
+04/08/26: Implementação das regras de renderização dinâmica no menu superior (Backoffice, Área do Professor e Controles de Acesso) baseadas no perfil da sessão.
 ============================================================================== 
 #}
 
@@ -277,7 +278,37 @@ HISTÓRICO DE ALTERAÇÕES:
 
     <!-- Navegação Topo Esquerdo -->
     <nav class="top-nav" id="menuSuperior">
-        {% block nav_links %}{% endblock %}
+        {% block nav_links %}
+            {% if session.get('perfil') %}
+                
+                <!-- Link público acessível para todos os perfis logados -->
+                <a href="/">Início</a>
+                
+                <!-- Regra Backoffice: apenas hierarquias administrativas -->
+                {% if session.get('perfil') in ['admin', 'gerente', 'coordenador', 'recepcionista'] %}
+                <div class="dropdown">
+                    <a href="javascript:void(0)">Backoffice <i class="fas fa-caret-down" style="font-size: 0.9em; margin-left: 4px;"></i></a>
+                    <div class="dropdown-content">
+                        <a href="/backoffice/funcionarios/novo">Cadastrar Funcionários</a>
+                        
+                        <!-- Regra Controles de Acesso: apenas admin e gerente -->
+                        {% if session.get('perfil') in ['admin', 'gerente'] %}
+                        <a href="/backoffice/permissoes">Controles de Acesso</a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Regra Área do Professor: estritamente para professores -->
+                {% if session.get('perfil') == 'professor' %}
+                <a href="/area_professor">Área do Professor</a>
+                {% endif %}
+
+                <!-- Logout visível para todos -->
+                <a href="/logout">Sair</a>
+                
+            {% endif %}
+        {% endblock %}
     </nav>
 
     {% block content %}{% endblock %}

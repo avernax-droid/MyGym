@@ -15,6 +15,7 @@
 # 01/08/26: Inclusão do sistema de busca assíncrona (AJAX) para auto-preenchimento por nome.
 # 03/08/26: Alteração na máscara de WhatsApp para formatar apenas no blur, manter limpo no focus/submit e lidar com preenchimento prévio/AJAX.
 # 03/08/26: Inclusão de campo hidden para controle de UPDATE no banco de dados e ajuste na resposta AJAX.
+# 04/08/26: Atualização da lista de cargos (Gerente, Coordenador, Professor, Recepcionista) e remoção da opção 'Outros'.
 # ============================================================================== #}
 
 {% extends "base.html" %}
@@ -209,12 +210,10 @@
                 <label for="cargo">Cargo</label>
                 <select id="cargo" name="cargo" required class="input-limpo campo-validavel">
                     <option value="" disabled selected>Selecione o cargo...</option>
+                    <option value="gerente">Gerente</option>
                     <option value="coordenador">Coordenador</option>
-                    <option value="recepcionista">Recepcionista</option>
-                    <option value="seguranca">Segurança</option>
                     <option value="professor">Professor</option>
-                    <option value="faxineira">Faxineira</option>
-                    <option value="outros">Outros</option>
+                    <option value="recepcionista">Recepcionista</option>
                 </select>
                 <small class="texto-apoio">As permissões de acesso serão baseadas neste cargo.</small>
                 <span class="msg-erro" id-erro="cargo">Selecione um Cargo.</span>
