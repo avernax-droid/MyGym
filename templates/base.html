@@ -13,7 +13,11 @@ HISTÓRICO DE ALTERAÇÕES:
 26/07/30: Inclusão do FontAwesome (ícones) e estilos globais para radio buttons e senhas com ícone.
 31/07/26: Ocultação do menu Backoffice na barra de navegação para usuários não logados e atualização de rota.
 01/08/26: Remoção do menu Backoffice para centralização das regras no cover.html.
-04/08/26: Implementação das regras de renderização dinâmica no menu superior (Backoffice, Área do Professor e Controles de Acesso) baseadas no perfil da sessão.
+04/08/26: Implementação das regras de renderização dinâmica no menu superior baseadas no perfil da sessão.
+04/08/26: Substituição de regras hardcoded (perfil) por validação dinâmica baseada nas permissões da session.
+04/08/26: Centralização absoluta da navegação (incluindo links desabilitados offline) no base.html.
+04/08/26: Simplificação da barra de navegação: remoção de "Início"/"Sair" e reestruturação do Backoffice.
+04/08/26: Remoção de marcadores temporários '(*)' dos submenus do Backoffice.
 ============================================================================== 
 #}
 
@@ -165,7 +169,7 @@ HISTÓRICO DE ALTERAÇÕES:
         .form-group {
             margin-bottom: 1.2rem;
             text-align: left;
-            position: relative; /* Necessário para posicionar o ícone dentro do input */
+            position: relative;
         }
 
         .form-control {
@@ -191,7 +195,6 @@ HISTÓRICO DE ALTERAÇÕES:
             background-color: rgba(255, 255, 255, 0.1);
         }
 
-        /* Estrutura para os Ícones de Senha (Olho) */
         .icone-senha {
             position: absolute;
             right: 15px;
@@ -206,7 +209,6 @@ HISTÓRICO DE ALTERAÇÕES:
             color: #80D5C9;
         }
 
-        /* Estrutura para os Radio Buttons (Bolinhas de Seleção) */
         .radio-group {
             display: flex;
             justify-content: space-between;
@@ -224,12 +226,11 @@ HISTÓRICO DE ALTERAÇÕES:
         }
 
         .radio-item input[type="radio"] {
-            accent-color: #80D5C9; /* Cor da bolinha quando selecionada */
+            accent-color: #80D5C9;
             transform: scale(1.2);
             cursor: pointer;
         }
 
-        /* Botão Padrão de Ação */
         .btn-acao {
             width: 100%;
             background-color: #80D5C9; 
@@ -278,37 +279,57 @@ HISTÓRICO DE ALTERAÇÕES:
 
     <!-- Navegação Topo Esquerdo -->
     <nav class="top-nav" id="menuSuperior">
-        {% block nav_links %}
-            {% if session.get('perfil') %}
-                
-                <!-- Link público acessível para todos os perfis logados -->
-                <a href="/">Início</a>
-                
-                <!-- Regra Backoffice: apenas hierarquias administrativas -->
-                {% if session.get('perfil') in ['admin', 'gerente', 'coordenador', 'recepcionista'] %}
-                <div class="dropdown">
-                    <a href="javascript:void(0)">Backoffice <i class="fas fa-caret-down" style="font-size: 0.9em; margin-left: 4px;"></i></a>
-                    <div class="dropdown-content">
-                        <a href="/backoffice/funcionarios/novo">Cadastrar Funcionários</a>
-                        
-                        <!-- Regra Controles de Acesso: apenas admin e gerente -->
-                        {% if session.get('perfil') in ['admin', 'gerente'] %}
-                        <a href="/backoffice/permissoes">Controles de Acesso</a>
-                        {% endif %}
-                    </div>
+        {% if session.get('perfil') %}
+            
+            {# Captura as permissões injetadas e a chave mestra #}
+            {% set p = session.get('permissoes', {}) %}
+            {% set is_free = p.get('mod_free') %}
+
+            {# BLOCO 1: BACKOFFICE #}
+            {% if is_free or p.get('mod_cad_func') or p.get('mod_cad_prof') or p.get('mod_cad_aluno') or p.get('mod_cad_perm') or p.get('mod_matricula') %}
+            <div class="dropdown">
+                <a href="javascript:void(0)">Backoffice <i class="fas fa-caret-down" style="font-size: 0.9em; margin-left: 4px;"></i></a>
+                <div class="dropdown-content">
+                    
+                    {% if is_free or p.get('mod_cad_func') %}
+                    <a href="/backoffice/funcionarios/novo">Cadastro Funcionário</a>
+                    {% endif %}
+                    
+                    {% if is_free or p.get('mod_cad_prof') %}
+                    <a href="#">Cadastro Professor</a>
+                    {% endif %}
+                    
+                    {% if is_free or p.get('mod_cad_aluno') %}
+                    <a href="#">Cadastro Aluno</a>
+                    {% endif %}
+                    
+                    {% if is_free or p.get('mod_cad_perm') %}
+                    <a href="/backoffice/permissoes">Controles de Acesso</a>
+                    {% endif %}
+                    
+                    {% if is_free or p.get('mod_matricula') %}
+                    <a href="#">Matrícula</a>
+                    {% endif %}
                 </div>
-                {% endif %}
-
-                <!-- Regra Área do Professor: estritamente para professores -->
-                {% if session.get('perfil') == 'professor' %}
-                <a href="/area_professor">Área do Professor</a>
-                {% endif %}
-
-                <!-- Logout visível para todos -->
-                <a href="/logout">Sair</a>
-                
+            </div>
             {% endif %}
-        {% endblock %}
+
+            {# BLOCO 2: ÁREA DO PROFESSOR #}
+            {% if is_free or p.get('mod_area_prof') %}
+            <a href="/area_professor">Professor</a>
+            {% endif %}
+
+            {# BLOCO 3: ÁREA DO ALUNO #}
+            {% if session.get('perfil') == 'aluno' or is_free or p.get('mod_area_aluno') %}
+            <a href="#">Aluno</a>
+            {% endif %}
+            
+        {% else %}
+            <!-- Links desabilitados para navegação via teclado, mouse e com visibilidade reduzida antes do login -->
+            <a tabindex="-1" style="opacity: 0.4 !important; pointer-events: none !important; cursor: default !important;">Backoffice</a>
+            <a tabindex="-1" style="opacity: 0.4 !important; pointer-events: none !important; cursor: default !important;">Professor</a>
+            <a tabindex="-1" style="opacity: 0.4 !important; pointer-events: none !important; cursor: default !important;">Aluno</a>
+        {% endif %}
     </nav>
 
     {% block content %}{% endblock %}

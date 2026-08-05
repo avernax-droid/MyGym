@@ -1,123 +1,289 @@
 {#
 ==============================================================================
 PROJETO: MyGym
-MÓDULO: cover.html (Mobile)
-DATA DE CRIAÇÃO: 26/07/29
-TÍTULO: Página de Boas-vindas (Capa - Versão Mobile)
-FUNÇÃO: Apresentar a interface inicial adaptada para dispositivos móveis.
+MÓDULO: templates/mobile/cover.html
+DATA DE CRIAÇÃO: 04/08/26
+TÍTULO: Página de Boas-vindas (Capa Mobile)
+FUNÇÃO: Apresentar a interface inicial responsiva e modais redimensionados
+        para celulares.
 
 HISTÓRICO DE ALTERAÇÕES:
-29/07/26: Criação do módulo específico para mobile; ajuste de tipografia e layout flexível focado em usabilidade touch.
-30/07/26: Remoção da opção "Backoffice" do menu de acesso (opção exclusiva para desktop).
+04/08/26: Criação baseada na cover do desktop, herdando de mobile/base.html.
+04/08/26: Ajuste definitivo da tipografia utilizando CSS clamp() para evitar truncamento e sangramento.
+04/08/26: Modais otimizados herdados do mobile/base.html.
+05/08/26: Ajuste do CSS no subtítulo para exibição centralizada em duas linhas.
 ============================================================================== 
 #}
 
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MyGym - Boas-vindas</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,600;0,800;1,300;1,800&display=swap" rel="stylesheet">
-    <style>
-        /* Paleta de Cores e Variáveis */
-        :root {
-            --fundo-gradiente-1: #002B49; 
-            --fundo-gradiente-2: #80D5C9; 
-            --texto-principal: #2C3E50;   
-        }
+{% extends "mobile/base.html" %}
 
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: 'Poppins', sans-serif;
-            background: linear-gradient(to bottom, var(--fundo-gradiente-1) 0%, var(--fundo-gradiente-2) 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            color: var(--texto-principal);
-        }
+{% block head %}
+<style>
+    .container {
+        padding: 0 1rem;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+        box-sizing: border-box;
+    }
 
-        /* Elemento Central - Flexível para Mobile */
-        .container {
-            padding: 2rem 1.5rem;
-            text-align: center;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            width: 100%;
-            box-sizing: border-box;
-        }
+    h1 {
+        font-weight: 300;
+        font-style: italic;
+        /* clamp garante que a fonte nunca sangra a tela (mínimo 3rem, máximo 4.5rem) */
+        font-size: clamp(3rem, 15vw, 4.5rem); 
+        margin-bottom: 0.2rem;
+        color: var(--texto-principal);
+        letter-spacing: -0.5px;
+        margin-top: -2rem; 
+    }
 
-        /* Título reduzido para não estourar a tela */
-        h1 {
-            font-weight: 300;
-            font-style: italic;
-            font-size: 4rem; 
-            margin-bottom: 0.5rem;
-            color: var(--texto-principal);
-            letter-spacing: -0.5px;
-            margin-top: 0;
-        }
+    h1 strong {
+        font-weight: 800; 
+        color: #002B49; 
+    }
 
-        h1 strong {
-            font-weight: 800; 
-            color: #002B49; 
-        }
+    p {
+        font-weight: 400; 
+        /* clamp garante que o texto encolha para caber na linha sem ficar minúsculo demais */
+        font-size: clamp(0.6rem, 3.2vw, 0.95rem); 
+        color: #FFFFFF; 
+        margin-bottom: 0; 
+        white-space: normal; /* Permite a quebra de linha */
+        text-align: center;
+        line-height: 1.4;
+    }
 
-        /* Texto livre para quebrar linhas na tela estreita */
-        p {
-            font-weight: 400; 
-            font-size: 1.1rem;
-            color: #FFFFFF; 
-            margin-bottom: 3rem; 
-            line-height: 1.6;
-        }
+    .btn-iniciar-capa {
+        position: absolute;
+        bottom: 2.5rem;
+        width: 80%;
+        left: 10%;
+        padding: 1rem;
+        box-shadow: 0px 4px 15px rgba(0, 0, 0, 0.3);
+    }
 
-        /* Navegação Empilhada e Expandida para o Toque */
-        .mobile-nav {
-            display: flex;
-            flex-direction: column;
-            gap: 1.2rem;
-            width: 100%;
-            max-width: 300px; /* Mantém uma largura elegante em celulares maiores */
-        }
+    .aviso-texto {
+        font-size: 0.8rem;
+        color: rgba(255, 255, 255, 0.6);
+        margin-top: -0.5rem; 
+        margin-bottom: 1.5rem;
+        line-height: 1.4;
+        text-align: center;
+        white-space: normal; 
+    }
+</style>
+{% endblock %}
 
-        .mobile-nav a {
-            color: #ffffff;
-            text-decoration: none;
-            font-size: 1.1rem;
-            font-weight: 400;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            padding: 1.2rem; /* Área de clique (touch) bem espaçosa */
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            border-radius: 40px;
-            transition: background-color 0.3s ease;
-        }
+{% block content %}
+<div class="container">
+    <h1><strong>MyGym</strong></h1>
+    <p>Gestão e acompanhamento pedagógico<br>para esportes aquáticos.</p>
+</div>
 
-        .mobile-nav a:active {
-            background-color: rgba(255, 255, 255, 0.15); /* Feedback visual ao tocar */
-        }
-    </style>
-</head>
-<body>
+<!-- Condicional do Botão INICIAR / EXIT -->
+{% if not session.get('perfil') %}
+    <button id="btnAbrirLogin" class="btn-acao btn-iniciar-capa">Iniciar</button>
+{% else %}
+    <button onclick="window.location.href='/logout'" class="btn-acao btn-iniciar-capa">EXIT</button>
+{% endif %}
 
-    <div class="container">
-        <!-- Título -->
-        <h1><strong>MyGym</strong></h1>
-        <!-- Descrição -->
-        <p>Gestão e acompanhamento pedagógico para esportes aquáticos.</p>
+<!-- ========================================== -->
+<!-- MODAL 1: LOGIN -->
+<!-- ========================================== -->
+<div id="modalLogin" class="modal-overlay">
+    <div class="modal-content">
+        <button class="btn-fechar fechar-modal">&times;</button>
+        <h2 class="modal-title">Acesso à Plataforma</h2>
         
-        <!-- Opções de Acesso Empilhadas -->
-        <nav class="mobile-nav">
-            <a href="#">Professor</a>
-            <a href="#">Aluno</a>
-        </nav>
+        <form action="/" method="POST">
+            <div class="form-group">
+                <input type="text" name="username" class="form-control" placeholder="Username" required>
+            </div>
+            
+            <div class="form-group">
+                <input type="password" name="password" class="form-control senha-input" placeholder="Password" required>
+                <i class="fa-regular fa-eye icone-senha alternar-senha"></i>
+            </div>
+            
+            <button type="submit" class="btn-acao">Acessar</button>
+        </form>
+        
+        <div class="modal-links">
+            <a id="linkAbrirRecuperacao">Esqueci minha senha</a>
+            <a id="linkAbrirCadastro">Primeiro Acesso? Cadastre-se</a>
+        </div>
     </div>
+</div>
 
-</body>
-</html>
+<!-- ========================================== -->
+<!-- MODAL 2: CADASTRO -->
+<!-- ========================================== -->
+<div id="modalCadastro" class="modal-overlay">
+    <div class="modal-content">
+        <button class="btn-fechar fechar-modal">&times;</button>
+        <h2 class="modal-title">Novo Cadastro</h2>
+        
+        <form action="/cadastrar_usuario" method="POST">
+            <div class="radio-group">
+                <label class="radio-item">
+                    <input type="radio" name="perfil_acesso" value="aluno" checked> Aluno
+                </label>
+                <label class="radio-item">
+                    <input type="radio" name="perfil_acesso" value="professor"> Professor
+                </label>
+                <label class="radio-item">
+                    <input type="radio" name="perfil_acesso" value="funcionario"> Func.
+                </label>
+            </div>
+
+            <div class="form-group">
+                <input type="text" name="nome_completo" class="form-control" placeholder="Nome Completo" required>
+            </div>
+
+            <div class="form-group">
+                <input type="text" name="novo_username" class="form-control" placeholder="Username" required>
+            </div>
+            
+            <div class="form-group">
+                <input type="password" name="nova_senha" class="form-control senha-input" placeholder="Senha" required>
+                <i class="fa-regular fa-eye icone-senha alternar-senha"></i>
+            </div>
+
+            <div class="form-group">
+                <input type="password" name="confirma_senha" class="form-control senha-input" placeholder="Confirmar Senha" required>
+                <i class="fa-regular fa-eye icone-senha alternar-senha"></i>
+            </div>
+            
+            <button type="submit" class="btn-acao">Confirmar</button>
+        </form>
+        
+        <div class="modal-links">
+            <a id="linkVoltarLoginCad">Já tenho acesso. Entrar</a>
+        </div>
+    </div>
+</div>
+
+<!-- ========================================== -->
+<!-- MODAL 3: RECUPERAÇÃO DE SENHA -->
+<!-- ========================================== -->
+<div id="modalRecuperacao" class="modal-overlay">
+    <div class="modal-content">
+        <button class="btn-fechar fechar-modal">&times;</button>
+        <h2 class="modal-title">Recuperar Senha</h2>
+        
+        <form action="#" method="POST">
+            <div class="radio-group">
+                <label class="radio-item">
+                    <input type="radio" name="perfil_recuperacao" value="aluno" checked> Aluno
+                </label>
+                <label class="radio-item">
+                    <input type="radio" name="perfil_recuperacao" value="professor"> Professor
+                </label>
+                <label class="radio-item">
+                    <input type="radio" name="perfil_recuperacao" value="funcionario"> Func.
+                </label>
+            </div>
+
+            <div class="form-group">
+                <input type="text" name="nome_completo_recuperacao" class="form-control" placeholder="Nome Completo" required>
+            </div>
+            
+            <button type="submit" class="btn-acao" style="margin-bottom: 1rem;">Enviar Senha</button>
+            
+            <p class="aviso-texto">
+                <i class="fa-solid fa-circle-info" style="margin-right: 5px;"></i>
+                A senha provisória será enviada para o e-mail cadastrado.
+            </p>
+        </form>
+        
+        <div class="modal-links">
+            <a id="linkVoltarLoginRec">Voltar para o Login</a>
+        </div>
+    </div>
+</div>
+
+<!-- SCRIPT DE CONTROLE -->
+<script>
+    const modalLogin = document.getElementById('modalLogin');
+    const modalCadastro = document.getElementById('modalCadastro');
+    const modalRecuperacao = document.getElementById('modalRecuperacao');
+    
+    const btnAbrirLogin = document.getElementById('btnAbrirLogin');
+    const linkAbrirCadastro = document.getElementById('linkAbrirCadastro');
+    const linkAbrirRecuperacao = document.getElementById('linkAbrirRecuperacao');
+    const linkVoltarLoginCad = document.getElementById('linkVoltarLoginCad');
+    const linkVoltarLoginRec = document.getElementById('linkVoltarLoginRec');
+    
+    const btnsFechar = document.querySelectorAll('.fechar-modal');
+
+    if (btnAbrirLogin) {
+        btnAbrirLogin.addEventListener('click', () => {
+            modalLogin.style.display = 'flex';
+        });
+    }
+
+    linkAbrirCadastro.addEventListener('click', () => {
+        modalLogin.style.display = 'none';
+        modalCadastro.style.display = 'flex';
+    });
+
+    linkAbrirRecuperacao.addEventListener('click', () => {
+        modalLogin.style.display = 'none';
+        modalRecuperacao.style.display = 'flex';
+    });
+
+    linkVoltarLoginCad.addEventListener('click', () => {
+        modalCadastro.style.display = 'none';
+        modalLogin.style.display = 'flex';
+    });
+
+    linkVoltarLoginRec.addEventListener('click', () => {
+        modalRecuperacao.style.display = 'none';
+        modalLogin.style.display = 'flex';
+    });
+
+    btnsFechar.forEach(btn => {
+        btn.addEventListener('click', () => {
+            modalLogin.style.display = 'none';
+            modalCadastro.style.display = 'none';
+            modalRecuperacao.style.display = 'none';
+        });
+    });
+
+    window.addEventListener('click', (e) => {
+        if (e.target === modalLogin) modalLogin.style.display = 'none';
+        if (e.target === modalCadastro) modalCadastro.style.display = 'none';
+        if (e.target === modalRecuperacao) modalRecuperacao.style.display = 'none';
+    });
+
+    const iconesSenha = document.querySelectorAll('.alternar-senha');
+
+    iconesSenha.forEach(icone => {
+        icone.addEventListener('click', function() {
+            const input = this.previousElementSibling;
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                this.classList.remove('fa-eye');
+                this.classList.add('fa-eye-slash'); 
+            } else {
+                input.type = 'password';
+                this.classList.remove('fa-eye-slash');
+                this.classList.add('fa-eye'); 
+            }
+        });
+    });
+
+    {% if request.args.get('show_login') == 'true' %}
+        modalLogin.style.display = 'flex';
+    {% endif %}
+
+    {% if request.args.get('erro_cadastro') %}
+        alert("{{ request.args.get('erro_cadastro') }}");
+        modalCadastro.style.display = 'flex';
+    {% endif %}
+</script>
+{% endblock %}

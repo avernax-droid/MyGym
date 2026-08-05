@@ -1,22 +1,23 @@
 {# ==============================================================================
-# PROJETO: MyGym
-# MÓDULO: templates/backoffice/cadastro_funcionario.html
-# DATA DE CRIAÇÃO: 31/07/26
-# TÍTULO: Cadastro de Funcionários
-# FUNÇÃO: Interface limpa e ampla para inserção dos dados de novos funcionários
-#         no backoffice, herdando a identidade visual principal.
-#
-# HISTÓRICO DE ALTERAÇÕES:
-# 31/07/26: Criação inicial da interface de cadastro.
-# 31/07/26: Refatoração visual completa para alinhar ao Design System do projeto e alteração do título.
-# 31/07/26: Ajustes de usabilidade: expansão do campo e-mail, máscara de WhatsApp, navegação por Enter,
-#           validação dinâmica do botão Salvar e alertas visuais para campos incorretos/vazios.
-# 31/07/26: Substituição do cargo por lista vertical suspensa contendo as opções e o item "Outros".
-# 01/08/26: Inclusão do sistema de busca assíncrona (AJAX) para auto-preenchimento por nome.
-# 03/08/26: Alteração na máscara de WhatsApp para formatar apenas no blur, manter limpo no focus/submit e lidar com preenchimento prévio/AJAX.
-# 03/08/26: Inclusão de campo hidden para controle de UPDATE no banco de dados e ajuste na resposta AJAX.
-# 04/08/26: Atualização da lista de cargos (Gerente, Coordenador, Professor, Recepcionista) e remoção da opção 'Outros'.
-# ============================================================================== #}
+ PROJETO: MyGym
+ MÓDULO: templates/backoffice/cadastro_funcionario.html
+ DATA DE CRIAÇÃO: 31/07/26
+ TÍTULO: Cadastro de Funcionários
+ FUNÇÃO: Interface limpa e ampla para inserção dos dados de novos funcionários
+         no backoffice, herdando a identidade visual principal.
+
+ HISTÓRICO DE ALTERAÇÕES:
+ 31/07/26: Criação inicial da interface de cadastro.
+ 31/07/26: Refatoração visual completa para alinhar ao Design System do projeto e alteração do título.
+ 31/07/26: Ajustes de usabilidade: expansão do campo e-mail, máscara de WhatsApp, navegação por Enter,
+           validação dinâmica do botão Salvar e alertas visuais para campos incorretos/vazios.
+ 31/07/26: Substituição do cargo por lista vertical suspensa contendo as opções e o item "Outros".
+ 01/08/26: Inclusão do sistema de busca assíncrona (AJAX) para auto-preenchimento por nome.
+ 03/08/26: Alteração na máscara de WhatsApp para formatar apenas no blur, manter limpo no focus/submit e lidar com preenchimento prévio/AJAX.
+ 03/08/26: Inclusão de campo hidden para controle de UPDATE no banco de dados e ajuste na resposta AJAX.
+ 04/08/26: Atualização da lista de cargos (Gerente, Coordenador, Professor, Recepcionista) e remoção da opção 'Outros'.
+ 04/08/26: Inclusão do ícone "X" no topo para saída/retorno à tela principal.
+============================================================================== #}
 
 {% extends "base.html" %}
 
@@ -34,6 +35,24 @@
         box-shadow: 0px 15px 35px rgba(0, 0, 0, 0.5);
         color: #FFFFFF;
         box-sizing: border-box;
+        position: relative; /* Necessário para ancorar o botão de fechar */
+    }
+
+    /* Estilo do botão X importado do design system dos modais */
+    .btn-fechar-form {
+        position: absolute;
+        top: 1rem;
+        right: 1.5rem;
+        font-size: 1.8rem;
+        color: #FFFFFF;
+        text-decoration: none;
+        opacity: 0.6;
+        transition: opacity 0.3s ease;
+        line-height: 1;
+    }
+
+    .btn-fechar-form:hover {
+        opacity: 1;
     }
 
     .header-pagina {
@@ -174,6 +193,9 @@
 
 {% block content %}
 <div class="container-cadastro">
+    <!-- Ícone de Saída Rápida -->
+    <a href="/" class="btn-fechar-form" title="Fechar">&times;</a>
+
     <header class="header-pagina">
         <h1>Cadastro de Funcionário</h1>
     </header>

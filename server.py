@@ -20,11 +20,16 @@
 # 03/08/26: Ajuste na validação do Professor para buscar na tabela funcionarios (Opção B) e correção de aspas na msg_erro.
 # 04/08/26: Implementação do decorador de segurança @requer_permissao e criação das rotas para o Controle de Acessos.
 # 04/08/26: Alteração na rota /api/permissoes/salvar para aplicar lógica de UPDATE caso o registro exista, ou INSERT caso contrário.
+# 04/08/26: Injeção dinâmica de permissões (permissoes_cargo) na session durante o login para renderização de menu.
+# 04/08/26: Correção na função is_mobile para detecção mais robusta de dispositivos móveis, sem dependência de regex.
+# 05/08/26: Injeção de logs no roteamento, ativação de auto-reload de templates e bloqueio de cache HTTP na rota index para debug mobile.
+# 05/08/26: Adição de dump completo dos cabeçalhos HTTP (request.headers) para investigar mascaramento pelo Ngrok.
+# 05/08/26: Correção na detecção mobile utilizando request.headers brutos (User-Agent e Sec-Ch-Ua-Mobile) substituindo o objeto parseado do Flask.
 # ==============================================================================
 
 import os
 from functools import wraps
-from flask import Flask, render_template, request, session, redirect, url_for, jsonify
+from flask import Flask, render_template, request, session, redirect, url_for, jsonify, make_response
 from dotenv import load_dotenv
 import re
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -36,25 +41,29 @@ from database.connection import get_connection
 load_dotenv()
 
 app = Flask(__name__)
+app.config['TEMPLATES_AUTO_RELOAD'] = True # Força a recarga de templates em ambiente de desenvolvimento
 # Agora a chave de segurança é lida do arquivo .env
 app.secret_key = os.getenv('SECRET_KEY', 'chave_padrao_fallback')
 
-def is_mobile(user_agent):
+def is_mobile(req):
     """
-    Função auxiliar que analisa o User-Agent do navegador.
+    Função auxiliar que analisa os cabeçalhos HTTP da requisição.
     Retorna True se identificar um dispositivo móvel, False para Desktop.
     """
-    if not user_agent:
+    # Verificação primária: cabeçalho moderno do Chromium (ex: enviado pelo Chrome via Ngrok)
+    sec_mobile = req.headers.get('Sec-Ch-Ua-Mobile')
+    if sec_mobile == '?1':
+        return True
+
+    # Verificação secundária: leitura direta da string bruta do User-Agent
+    ua_string = req.headers.get('User-Agent', '').lower()
+    if not ua_string:
         return False
-        
-    mobile_patterns = [
-        'Android', 'webOS', 'iPhone', 'iPad', 'iPod', 'BlackBerry', 'Windows Phone'
-    ]
     
-    for pattern in mobile_patterns:
-        if re.search(pattern, user_agent.string, re.IGNORECASE):
-            return True
-            
+    # Validação blindada e direta na string (sem depender da biblioteca re)
+    if 'mobi' in ua_string or 'android' in ua_string or 'iphone' in ua_string:
+        return True
+        
     return False
 
 def requer_permissao(modulo):
@@ -119,6 +128,8 @@ def index():
         if username == 'admin' and password == 'admin#123':
             session['perfil'] = 'admin'
             session['nome_completo'] = 'Administrador Master'
+            # O master sempre recebe a chave mestra na sessão
+            session['permissoes'] = {'mod_free': True}
             return redirect(url_for('index'))
         else:
             # Validação via banco de dados para os demais usuários
@@ -126,13 +137,24 @@ def index():
             if conn:
                 try:
                     cursor = conn.cursor()
-                    sql = "SELECT password_hash, perfil, nome_completo FROM usuarios WHERE username = %s"
+                    sql = "SELECT password_hash, perfil, nome_completo FROM usuarios WHERE username = %s AND status = 'ativo'"
                     cursor.execute(sql, (username,))
                     usuario = cursor.fetchone()
                     
                     if usuario and check_password_hash(usuario[0], password):
                         session['perfil'] = usuario[1]
                         session['nome_completo'] = usuario[2]
+                        
+                        # --- CARGA DINÂMICA DE PERMISSÕES NA SESSÃO ---
+                        # Busca todos os módulos que este perfil tem permissão (pode_acessar = 1)
+                        sql_permissoes = "SELECT modulo FROM permissoes_cargo WHERE cargo = %s AND pode_acessar = 1"
+                        cursor.execute(sql_permissoes, (usuario[1],))
+                        perms = cursor.fetchall()
+                        
+                        # Transforma o resultado em um dicionário para acesso fácil no Jinja2 (HTML)
+                        session['permissoes'] = {p[0]: True for p in perms}
+                        # ----------------------------------------------
+                        
                         return redirect(url_for('index'))
                 except Exception as e:
                     print(f"Erro ao validar login no banco: {e}")
@@ -143,14 +165,30 @@ def index():
             # Falha de autenticação (recarrega a página inicial por segurança)
             return redirect(url_for('index'))
 
-    mobile = is_mobile(request.user_agent)
+    # Captura o User-Agent bruto direto dos headers para o log
+    user_agent_str = request.headers.get('User-Agent', 'Desconhecido')
+    # Passa o objeto request inteiro para nossa nova função
+    mobile = is_mobile(request)
+    
+    # Imprime os logs de debug no terminal
+    print(f"\n[DEBUG ROTEAMENTO] User-Agent Bruto: {user_agent_str}")
+    print(f"[DEBUG ROTEAMENTO] is_mobile resolvido como: {mobile}")
+    print("[DEBUG HEADERS BRUTOS]")
+    print(request.headers)
     
     if mobile:
         # Entrega a versão fluida focada em usabilidade touch
-        return render_template('mobile/cover.html')
+        resp = make_response(render_template('mobile/cover.html'))
     else:
         # Renderiza o cover do desktop que herda o base.html e injeta o conteúdo central
-        return render_template('cover.html')
+        resp = make_response(render_template('cover.html'))
+        
+    # Injeção de headers para bloquear o uso de cache em navegadores móveis
+    resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    resp.headers['Pragma'] = 'no-cache'
+    resp.headers['Expires'] = '0'
+    
+    return resp
 
 @app.route('/logout')
 def logout():
@@ -169,6 +207,7 @@ def toggle_admin():
         session.pop('perfil', None)
     else:
         session['perfil'] = 'admin'
+        session['permissoes'] = {'mod_free': True} # Atualiza a chave mestra no toggle
         
     return redirect(url_for('index'))
 

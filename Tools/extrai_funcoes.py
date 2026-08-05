@@ -1,7 +1,7 @@
 # Script Python que gera uma tabela pronta
 # com os modulos python e html contidos na pasta corrente
 #
-# para executar: python extrai_funcoes.py > doc_modulos.txt
+# para executar: python extrai_funcoes.py > modulos.txt
 
 
 import re

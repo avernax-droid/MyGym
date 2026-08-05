@@ -21,6 +21,7 @@ HISTÓRICO DE ALTERAÇÕES:
 03/08/26: Inclusão de alerta de erro e reabertura do modal caso o cadastro seja inválido.
 04/08/26: Atualização do bloco nav_links para aplicar a renderização condicional baseada no perfil da sessão.
 04/08/26: Correção de visibilidade de menus para o perfil 'admin' (super usuário).
+04/08/26: Exclusão do bloco nav_links para eliminação de conflito e centralização da renderização dinâmica diretamente no base.html.
 ============================================================================== 
 #}
 
@@ -79,42 +80,6 @@ HISTÓRICO DE ALTERAÇÕES:
         white-space: normal; 
     }
 </style>
-{% endblock %}
-
-{% block nav_links %}
-    {% if session.get('perfil') %}
-        
-        <!-- Regra Backoffice: apenas hierarquias administrativas -->
-        {% if session.get('perfil') in ['admin', 'gerente', 'coordenador', 'recepcionista'] %}
-        <div class="dropdown">
-            <a href="#" class="dropbtn">Backoffice <i class="fas fa-caret-down" style="font-size: 0.9em; margin-left: 4px;"></i></a>
-            <div class="dropdown-content">
-                <a href="/backoffice/funcionarios/novo">Cadastro de Funcionários</a>
-                
-                <!-- Regra Controles de Acesso: apenas admin e gerente -->
-                {% if session.get('perfil') in ['admin', 'gerente'] %}
-                <a href="/backoffice/permissoes">Controles de Acesso</a>
-                {% endif %}
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- Regra Área do Professor: para professores e admin -->
-        {% if session.get('perfil') in ['professor', 'admin'] %}
-        <a href="/area_professor">Professor</a>
-        {% endif %}
-
-        <!-- Regra Aluno: para alunos e admin -->
-        {% if session.get('perfil') in ['aluno', 'admin'] %}
-        <a href="#">Aluno</a>
-        {% endif %}
-        
-    {% else %}
-        <!-- Links desabilitados para navegação via teclado, mouse e com visibilidade reduzida antes do login (inline styles para sobrepor base.html) -->
-        <a tabindex="-1" style="opacity: 0.4 !important; pointer-events: none !important; cursor: default !important;">Backoffice</a>
-        <a tabindex="-1" style="opacity: 0.4 !important; pointer-events: none !important; cursor: default !important;">Professor</a>
-        <a tabindex="-1" style="opacity: 0.4 !important; pointer-events: none !important; cursor: default !important;">Aluno</a>
-    {% endif %}
 {% endblock %}
 
 {% block content %}

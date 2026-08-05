@@ -1,13 +1,18 @@
-{#
-==========================================================================
+{# 
+==============================================================================
 PROJETO: MyGym
 MÓDULO: templates/mobile/base.html
-DATA DE CRIAÇÃO: 26/07/30
+DATA DE CRIAÇÃO: 04/08/26
 TÍTULO: Layout Mestre (Mobile)
-FUNÇÃO: Serve como o esqueleto principal para todas as telas do sistema mobile. Define a estrutura HTML global, variáveis CSS e foca na ergonomia touch (botões ghost expandidos e layout em coluna).
+FUNÇÃO: Esqueleto principal do sistema para dispositivos móveis, sem o módulo 
+        Backoffice, com interface otimizada para toque (UI/UX Mobile).
 
 HISTÓRICO DE ALTERAÇÕES:
-26/07/30: Criação do layout mestre mobile com foco em usabilidade touch e blocos Jinja2.
+04/08/26: Criação estrutural separada da versão desktop.
+04/08/26: Inclusão de trava de zoom no viewport (user-scalable=no).
+04/08/26: Remoção total do menu Backoffice para acesso via celular.
+04/08/26: Ajustes de modal para preencher 95% da tela.
+04/08/26: Fonte dos inputs fixada em 16px para evitar auto-zoom em sistemas iOS/Android.
 ============================================================================== 
 #}
 
@@ -15,101 +20,214 @@ HISTÓRICO DE ALTERAÇÕES:
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <!-- Viewport estrito para evitar zoom indesejado durante toques rápidos -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>{% block title %}MyGym Mobile{% endblock %}</title>
+    <title>MyGym - Mobile</title>
     
-    <!-- Importação de Fontes: Poppins -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,600;0,800;1,300;1,800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <style>
-        /* Design System - Variáveis Globais */
         :root {
-            --cor-primaria: #002B49; 
-            --cor-secundaria: #80D5C9; 
-            --texto-claro: #FFFFFF;
-            --texto-escuro: #2C3E50;
+            --fundo-gradiente-1: #002B49; 
+            --fundo-gradiente-2: #80D5C9; 
+            --texto-principal: #2C3E50;
             --fonte-principal: 'Poppins', sans-serif;
         }
 
-        /* Reset e Estilos Globais */
         body {
             margin: 0;
             padding: 0;
             font-family: var(--fonte-principal);
-            background: linear-gradient(to bottom, var(--cor-primaria) 0%, var(--cor-secundaria) 100%);
-            background-attachment: fixed;
-            color: var(--texto-claro);
-            min-height: 100vh;
+            background: linear-gradient(to bottom, var(--fundo-gradiente-1) 0%, var(--fundo-gradiente-2) 100%);
+            height: 100vh;
             display: flex;
-            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: var(--texto-principal);
+            overflow: hidden; 
         }
 
-        /* Header Mobile */
-        .header-mobile {
-            padding: 1.5rem;
-            text-align: center;
+        /* Navegação Mobile Reduzida e Limpa */
+        .top-nav {
+            position: absolute;
+            top: 1.5rem;
+            left: 1rem;
+            display: flex;
+            gap: 1rem;
+            align-items: center;
         }
 
-        .marca-mygym {
-            font-weight: 800;
-            font-style: italic;
-            font-size: 2.2rem;
-            color: var(--texto-claro);
+        .top-nav a {
+            color: #ffffff;
             text-decoration: none;
-            letter-spacing: -0.5px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 0.5rem; /* Aumenta a área de clique do polegar */
         }
 
-        /* Container Principal Mobile */
-        .container-mobile {
-            flex: 1;
-            padding: 1rem 1.5rem 3rem 1.5rem;
-            display: flex;
-            flex-direction: column;
+        .top-nav a:hover {
+            color: #48C9B0; 
+        }
+
+        /* Modais Otimizados para Celular */
+        .modal-overlay {
+            display: none; 
+            position: fixed;
+            top: 0;
+            left: 0;
             width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7); 
+            z-index: 1000; 
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(4px); 
+        }
+
+        .modal-content {
+            background-color: #001524; 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            padding: 1.8rem 1.2rem; /* Menos margem interna para economizar espaço */
+            border-radius: 8px; 
+            width: 95%; /* Usa quase toda a largura do celular */
+            max-width: 400px;
+            box-shadow: 0px 15px 35px rgba(0, 0, 0, 0.5);
+            position: relative;
+            text-align: center;
+            color: #FFFFFF;
             box-sizing: border-box;
         }
 
-        /* Botões Ghost e Áreas de Toque Expandidas */
-        .btn-ghost-mobile {
-            display: block;
+        .btn-fechar {
+            position: absolute;
+            top: 0.2rem;
+            right: 0.8rem;
+            font-size: 2rem;
+            color: #FFFFFF;
+            cursor: pointer;
+            background: none;
+            border: none;
+            opacity: 0.7;
+        }
+
+        .modal-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            margin-top: 0;
+        }
+
+        .form-group {
+            margin-bottom: 1.2rem;
+            text-align: left;
+            position: relative;
+        }
+
+        .form-control {
             width: 100%;
-            background-color: transparent;
-            border: 1px solid rgba(255, 255, 255, 0.4);
-            color: var(--texto-claro);
-            padding: 1.2rem;
-            margin-bottom: 1rem;
-            border-radius: 40px;
+            padding: 0.85rem 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background-color: rgba(255, 255, 255, 0.05); 
+            border-radius: 6px; 
+            color: #FFFFFF;
+            font-family: var(--fonte-principal);
+            font-size: 16px; /* 16px trava o auto-zoom nativo dos celulares */
+            box-sizing: border-box;
+        }
+
+        .form-control::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .icone-senha {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 1.2rem; /* Mais fácil de tocar */
+        }
+
+        .radio-group {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+        }
+
+        .radio-item {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .radio-item input[type="radio"] {
+            accent-color: #80D5C9;
+            transform: scale(1.3);
+        }
+
+        .btn-acao {
+            width: 100%;
+            background-color: #80D5C9; 
+            color: #002B49;
+            border: none;
+            padding: 1rem;
+            border-radius: 8px; 
             font-family: var(--fonte-principal);
             font-size: 1.1rem;
-            font-weight: 400;
-            text-align: center;
-            text-decoration: none;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 0.5rem;
+            margin-bottom: 1.2rem;
             text-transform: uppercase;
-            letter-spacing: 2px;
-            box-sizing: border-box;
-            transition: background-color 0.3s ease;
         }
 
-        .btn-ghost-mobile:active {
-            background-color: rgba(255, 255, 255, 0.2); /* Feedback visual na tela touch */
+        .modal-links {
+            display: flex;
+            flex-direction: column;
+            gap: 0.8rem;
+            font-size: 0.95rem;
+        }
+
+        .modal-links a {
+            color: #80D5C9;
+            text-decoration: none;
         }
     </style>
     {% block head %}{% endblock %}
 </head>
 <body>
-    {% block header %}
-    <header class="header-mobile">
-        <a href="/" class="marca-mygym">MyGym</a>
-    </header>
-    {% endblock %}
 
-    <main class="container-mobile">
-        {% block content %}{% endblock %}
-    </main>
+    <!-- Navegação Estrita Mobile -->
+    <nav class="top-nav" id="menuSuperior">
+        {% if session.get('perfil') %}
+            
+            {% set p = session.get('permissoes', {}) %}
+            {% set is_free = p.get('mod_free') %}
 
-    {% block scripts %}{% endblock %}
+            {# BLOCO: ÁREA DO PROFESSOR (Visível se autorizado) #}
+            {% if is_free or p.get('mod_area_prof') %}
+            <a href="/area_professor">Professor</a>
+            {% endif %}
+
+            {# BLOCO: ÁREA DO ALUNO (Visível se autorizado) #}
+            {% if session.get('perfil') == 'aluno' or is_free or p.get('mod_area_aluno') %}
+            <a href="#">Aluno</a>
+            {% endif %}
+            
+        {% else %}
+            <!-- Links desabilitados offline -->
+            <a tabindex="-1" style="opacity: 0.4 !important; pointer-events: none !important;">Professor</a>
+            <a tabindex="-1" style="opacity: 0.4 !important; pointer-events: none !important;">Aluno</a>
+        {% endif %}
+    </nav>
+
+    {% block content %}{% endblock %}
+
 </body>
 </html>
