@@ -12,6 +12,7 @@ HISTÓRICO DE ALTERAÇÕES:
 04/08/26: Ajuste definitivo da tipografia utilizando CSS clamp() para evitar truncamento e sangramento.
 04/08/26: Modais otimizados herdados do mobile/base.html.
 05/08/26: Ajuste do CSS no subtítulo para exibição centralizada em duas linhas.
+05/08/26: Inclusão do modal de troca obrigatória de senha e roteamento do form de recuperação.
 ============================================================================== 
 #}
 
@@ -174,7 +175,7 @@ HISTÓRICO DE ALTERAÇÕES:
         <button class="btn-fechar fechar-modal">&times;</button>
         <h2 class="modal-title">Recuperar Senha</h2>
         
-        <form action="#" method="POST">
+        <form action="/recuperar_senha" method="POST">
             <div class="radio-group">
                 <label class="radio-item">
                     <input type="radio" name="perfil_recuperacao" value="aluno" checked> Aluno
@@ -205,11 +206,39 @@ HISTÓRICO DE ALTERAÇÕES:
     </div>
 </div>
 
+<!-- ========================================== -->
+<!-- MODAL 4: TROCA OBRIGATÓRIA DE SENHA -->
+<!-- ========================================== -->
+<div id="modalTrocaSenha" class="modal-overlay">
+    <div class="modal-content">
+        <button class="btn-fechar fechar-modal">&times;</button>
+        <h2 class="modal-title">Nova Senha</h2>
+        <p class="aviso-texto" style="margin-bottom: 1.5rem;">Por motivos de segurança, você deve cadastrar uma nova senha definitiva para acessar.</p>
+        
+        <form action="/trocar_senha_obrigatoria" method="POST">
+            <input type="hidden" name="reset_user" value="{{ request.args.get('reset_user', '') }}">
+            
+            <div class="form-group">
+                <input type="password" name="nova_senha" class="form-control senha-input" placeholder="Nova Senha" required>
+                <i class="fa-regular fa-eye icone-senha alternar-senha"></i>
+            </div>
+
+            <div class="form-group">
+                <input type="password" name="confirma_senha" class="form-control senha-input" placeholder="Confirmar Nova Senha" required>
+                <i class="fa-regular fa-eye icone-senha alternar-senha"></i>
+            </div>
+            
+            <button type="submit" class="btn-acao">Salvar e Acessar</button>
+        </form>
+    </div>
+</div>
+
 <!-- SCRIPT DE CONTROLE -->
 <script>
     const modalLogin = document.getElementById('modalLogin');
     const modalCadastro = document.getElementById('modalCadastro');
     const modalRecuperacao = document.getElementById('modalRecuperacao');
+    const modalTrocaSenha = document.getElementById('modalTrocaSenha');
     
     const btnAbrirLogin = document.getElementById('btnAbrirLogin');
     const linkAbrirCadastro = document.getElementById('linkAbrirCadastro');
@@ -250,6 +279,7 @@ HISTÓRICO DE ALTERAÇÕES:
             modalLogin.style.display = 'none';
             modalCadastro.style.display = 'none';
             modalRecuperacao.style.display = 'none';
+            modalTrocaSenha.style.display = 'none';
         });
     });
 
@@ -257,6 +287,7 @@ HISTÓRICO DE ALTERAÇÕES:
         if (e.target === modalLogin) modalLogin.style.display = 'none';
         if (e.target === modalCadastro) modalCadastro.style.display = 'none';
         if (e.target === modalRecuperacao) modalRecuperacao.style.display = 'none';
+        if (e.target === modalTrocaSenha) modalTrocaSenha.style.display = 'none';
     });
 
     const iconesSenha = document.querySelectorAll('.alternar-senha');
@@ -277,13 +308,37 @@ HISTÓRICO DE ALTERAÇÕES:
         });
     });
 
+    // INJEÇÃO DE ALERTAS E NAVEGAÇÃO AUTOMÁTICA (SERVER)
     {% if request.args.get('show_login') == 'true' %}
+        modalLogin.style.display = 'flex';
+    {% endif %}
+
+    {% if request.args.get('erro_login') %}
+        alert("{{ request.args.get('erro_login') }}");
         modalLogin.style.display = 'flex';
     {% endif %}
 
     {% if request.args.get('erro_cadastro') %}
         alert("{{ request.args.get('erro_cadastro') }}");
         modalCadastro.style.display = 'flex';
+    {% endif %}
+
+    {% if request.args.get('erro_recuperacao') %}
+        alert("{{ request.args.get('erro_recuperacao') }}");
+        modalRecuperacao.style.display = 'flex';
+    {% endif %}
+
+    {% if request.args.get('msg_alerta') %}
+        alert("{{ request.args.get('msg_alerta') }}");
+    {% endif %}
+
+    // GATILHO: SENHA PROVISÓRIA DETECTADA
+    {% if request.args.get('force_reset') == 'true' %}
+        modalLogin.style.display = 'none';
+        modalTrocaSenha.style.display = 'flex';
+        {% if request.args.get('erro_reset') %}
+            alert("{{ request.args.get('erro_reset') }}");
+        {% endif %}
     {% endif %}
 </script>
 {% endblock %}
