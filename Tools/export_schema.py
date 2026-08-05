@@ -3,9 +3,9 @@
 import mysql.connector
 
 DB_CONFIG ={
-    'host': '172.24.144.1',
+    'host': '127.0.0.1',
     'user': 'root',
-    'port': 3306,
+    'port': 3307,
     'password': 'TonMix#25',
     'database': 'mygym'  # <- troca aqui
 }

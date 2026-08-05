@@ -13,6 +13,7 @@ HISTÓRICO DE ALTERAÇÕES:
 04/08/26: Remoção total do menu Backoffice para acesso via celular.
 04/08/26: Ajustes de modal para preencher 95% da tela.
 04/08/26: Fonte dos inputs fixada em 16px para evitar auto-zoom em sistemas iOS/Android.
+05/08/26: Correção de duplicação na tag <head> e inclusão do validacoes.js.
 ============================================================================== 
 #}
 
@@ -23,11 +24,15 @@ HISTÓRICO DE ALTERAÇÕES:
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>MyGym - Mobile</title>
     
+    <!-- Fontes Poppins e Ícones FontAwesome -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,600;0,800;1,300;1,800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
+    <!-- Central de Validações Globais -->
+    <script src="{{ url_for('static', filename='validacoes.js') }}"></script>
+
     <style>
         :root {
             --fundo-gradiente-1: #002B49; 

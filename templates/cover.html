@@ -23,6 +23,8 @@ HISTÓRICO DE ALTERAÇÕES:
 04/08/26: Correção de visibilidade de menus para o perfil 'admin' (super usuário).
 04/08/26: Exclusão do bloco nav_links para eliminação de conflito e centralização da renderização dinâmica diretamente no base.html.
 05/08/26: Inclusão do modal de troca obrigatória de senha e roteamento do form de recuperação.
+05/08/26: Inclusão do campo CPF no cadastro com máscara/validação global e alteração da busca de recuperação para Username.
+05/08/26: Implementação de feedback visual e bloqueio dinâmico do botão de submit no formulário de cadastro caso o CPF seja inválido.
 ============================================================================== 
 #}
 
@@ -80,6 +82,12 @@ HISTÓRICO DE ALTERAÇÕES:
         text-align: center;
         white-space: normal; 
     }
+
+    /* Trava visual para botão desabilitado */
+    .btn-acao:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
 </style>
 {% endblock %}
 
@@ -132,7 +140,7 @@ HISTÓRICO DE ALTERAÇÕES:
         <button class="btn-fechar fechar-modal">&times;</button>
         <h2 class="modal-title">Novo Cadastro</h2>
         
-        <form action="/cadastrar_usuario" method="POST">
+        <form id="formCadastro" action="/cadastrar_usuario" method="POST">
             <div class="radio-group">
                 <label class="radio-item">
                     <input type="radio" name="perfil_acesso" value="aluno" checked> Aluno
@@ -150,6 +158,11 @@ HISTÓRICO DE ALTERAÇÕES:
             </div>
 
             <div class="form-group">
+                <input type="text" id="cpf_cadastro" name="cpf" class="form-control" placeholder="CPF (Apenas números)" maxlength="14" required>
+                <span id="erro_cpf_cadastro" style="display: none; color: #ff6b6b; font-size: 0.85rem; text-align: left; margin-top: 5px; width: 100%;">CPF inválido.</span>
+            </div>
+
+            <div class="form-group">
                 <input type="text" name="novo_username" class="form-control" placeholder="Username" required>
             </div>
             
@@ -163,7 +176,7 @@ HISTÓRICO DE ALTERAÇÕES:
                 <i class="fa-regular fa-eye icone-senha alternar-senha"></i>
             </div>
             
-            <button type="submit" class="btn-acao">Confirmar</button>
+            <button type="submit" id="btnConfirmarCadastro" class="btn-acao" disabled>Confirmar</button>
         </form>
         
         <div class="modal-links">
@@ -194,7 +207,7 @@ HISTÓRICO DE ALTERAÇÕES:
             </div>
 
             <div class="form-group">
-                <input type="text" name="nome_completo_recuperacao" class="form-control" placeholder="Nome Completo" required>
+                <input type="text" name="username_recuperacao" class="form-control" placeholder="Username" required>
             </div>
             
             <button type="submit" class="btn-acao" style="margin-bottom: 1rem;">Enviar Senha Provisória</button>
@@ -252,6 +265,67 @@ HISTÓRICO DE ALTERAÇÕES:
     const linkVoltarLoginRec = document.getElementById('linkVoltarLoginRec');
     
     const btnsFechar = document.querySelectorAll('.fechar-modal');
+
+    // Integração do Campo CPF (Máscara e Validação Visual Dinâmica)
+    const formCadastro = document.getElementById('formCadastro');
+    const inputCpfCadastro = document.getElementById('cpf_cadastro');
+    const erroCpfCadastro = document.getElementById('erro_cpf_cadastro');
+    const btnConfirmarCadastro = document.getElementById('btnConfirmarCadastro');
+
+    if (inputCpfCadastro) {
+        // Trava de segurança inicial no caso do campo estar vazio
+        if (btnConfirmarCadastro && inputCpfCadastro.value === '') {
+            btnConfirmarCadastro.disabled = true;
+        }
+
+        inputCpfCadastro.addEventListener('focus', function(e) {
+            if (typeof removerMascara === 'function') removerMascara(e.target);
+            if (erroCpfCadastro) erroCpfCadastro.style.display = 'none';
+        });
+
+        inputCpfCadastro.addEventListener('input', function(e) {
+            let valor = e.target.value.replace(/\D/g, "");
+            if (valor.length > 11) valor = valor.slice(0, 11);
+            e.target.value = valor;
+            
+            if (btnConfirmarCadastro) {
+                // Mantém o botão bloqueado caso não tenha exatamente os 11 dígitos
+                btnConfirmarCadastro.disabled = (valor.length !== 11);
+            }
+        });
+
+        inputCpfCadastro.addEventListener('blur', function(e) {
+            if (typeof aplicarMascaraCPF === 'function') aplicarMascaraCPF(e.target);
+            
+            if (typeof validarCPF === 'function') {
+                const cpfValido = validarCPF(e.target.value);
+                if (!cpfValido && e.target.value.trim() !== "") {
+                    // Feedback de falha
+                    if (erroCpfCadastro) erroCpfCadastro.style.display = 'block';
+                    if (btnConfirmarCadastro) btnConfirmarCadastro.disabled = true;
+                } else {
+                    // Liberação
+                    if (erroCpfCadastro) erroCpfCadastro.style.display = 'none';
+                    if (btnConfirmarCadastro) btnConfirmarCadastro.disabled = !cpfValido;
+                }
+            }
+        });
+    }
+
+    if (formCadastro) {
+        formCadastro.addEventListener('submit', function(e) {
+            if (inputCpfCadastro && typeof validarCPF === 'function') {
+                if (!validarCPF(inputCpfCadastro.value)) {
+                    e.preventDefault(); 
+                    if (erroCpfCadastro) erroCpfCadastro.style.display = 'block';
+                    inputCpfCadastro.focus();
+                } else {
+                    // Remove a máscara antes de despachar para o backend salvar limpo no BD
+                    if (typeof removerMascara === 'function') removerMascara(inputCpfCadastro);
+                }
+            }
+        });
+    }
 
     if (btnAbrirLogin) {
         btnAbrirLogin.addEventListener('click', () => {

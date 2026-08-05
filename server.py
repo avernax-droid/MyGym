@@ -28,6 +28,8 @@
 # 05/08/26: Criação das rotas /recuperar_senha e /trocar_senha_obrigatoria, e interceptação de login provisório.
 # 05/08/26: Implementação do envio real de e-mail de recuperação utilizando smtplib e credenciais do .env.
 # 05/08/26: Ajuste de usabilidade: limpeza de espaços (.strip()) no login e remoção de caracteres ambíguos na geração da senha provisória.
+# 05/08/26: Migração das validações de segurança e buscas para utilizar CPF e ID (usuario_id) em vez do nome em texto puro.
+# 05/08/26: Correção no cadastro de usuário para vincular o usuario_id na tabela raiz e herdar o cargo como perfil; ajuste na recuperação de senha.
 # ==============================================================================
 
 import os
@@ -264,16 +266,17 @@ def toggle_admin():
 def cadastrar_usuario():
     """
     Rota responsável por receber os dados do modal de Cadastro de Primeiro Acesso
-    e inserir na tabela `usuarios`, validando antes se o registro existe na base raiz.
+    e inserir na tabela `usuarios`, validando antes se o registro existe na base raiz via CPF,
+    garantindo que o vínculo (usuario_id) seja preenchido na tabela de origem.
     """
-    perfil = request.form.get('perfil_acesso')
+    perfil_form = request.form.get('perfil_acesso')
+    cpf = request.form.get('cpf')
     nome_completo = request.form.get('nome_completo')
     username = request.form.get('novo_username')
     senha = request.form.get('nova_senha')
     confirma_senha = request.form.get('confirma_senha')
 
     if senha != confirma_senha:
-        # Redireciona em caso de senhas divergentes
         return redirect(url_for('index', erro_cadastro="As senhas não conferem."))
 
     conn = get_connection()
@@ -281,41 +284,63 @@ def cadastrar_usuario():
         try:
             cursor = conn.cursor()
             
-            # --- VALIDAÇÃO DE EXISTÊNCIA NA BASE RAIZ ---
-            # O professor é primeiramente um funcionário, então validamos na tabela de funcionarios
+            # --- VALIDAÇÃO DE EXISTÊNCIA E CAPTURA DO CARGO REAL ---
             tabela_map = {
                 'funcionario': 'funcionarios',
                 'professor': 'funcionarios',
                 'aluno': 'alunos'
             }
             
-            tabela_alvo = tabela_map.get(perfil)
+            tabela_alvo = tabela_map.get(perfil_form)
+            base_id = None
+            perfil_final = perfil_form # Fallback inicial
+            
             if tabela_alvo:
-                sql_check = f"SELECT id FROM {tabela_alvo} WHERE nome_completo = %s LIMIT 1"
+                # Busca o ID na base raiz, e se for funcionário, traz também o cargo
+                if tabela_alvo == 'funcionarios':
+                    sql_check = f"SELECT id, cargo FROM {tabela_alvo} WHERE cpf = %s LIMIT 1"
+                else:
+                    sql_check = f"SELECT id FROM {tabela_alvo} WHERE cpf = %s LIMIT 1"
+                    
                 try:
-                    cursor.execute(sql_check, (nome_completo,))
+                    cursor.execute(sql_check, (cpf,))
                     existe = cursor.fetchone()
                     if not existe:
-                        msg_erro = f"{perfil.capitalize()} {nome_completo} não encontrado(a) na base de dados do sistema."
+                        msg_erro = f"{perfil_form.capitalize()} portador do CPF informado não encontrado na base de dados do sistema."
                         return redirect(url_for('index', erro_cadastro=msg_erro))
+                    
+                    base_id = existe[0]
+                    # Sobrescreve o perfil genérico pelo cargo real para garantir as permissões
+                    if tabela_alvo == 'funcionarios':
+                        perfil_final = existe[1]
+                        
                 except Exception as e:
                     print(f"Erro ao verificar existência na tabela {tabela_alvo}: {e}")
-                    msg_erro = f"Não foi possível validar o cadastro de {perfil.capitalize()}. Verifique com o administrador."
+                    msg_erro = f"Não foi possível validar o cadastro de {perfil_form.capitalize()}. Verifique com o administrador."
                     return redirect(url_for('index', erro_cadastro=msg_erro))
             # --------------------------------------------
 
             # Criptografa a senha antes de salvar no banco
             password_hash = generate_password_hash(senha)
 
+            # Salva na tabela usuarios com o perfil correto (ex: 'gerente')
             sql = """
                 INSERT INTO usuarios (username, password_hash, perfil, status, nome_completo, senha_provisoria)
                 VALUES (%s, %s, %s, %s, %s, %s)
             """
-            # Define o status padrão como ativo e senha_provisoria como false (0)
-            valores = (username, password_hash, perfil, 'ativo', nome_completo, 0)
+            valores = (username, password_hash, perfil_final, 'ativo', nome_completo, 0)
             cursor.execute(sql, valores)
+            
+            # Captura o ID auto incremental que acabou de ser gerado para o usuário
+            novo_usuario_id = cursor.lastrowid
+            
+            # Criação do vínculo relacional: Atualiza a base raiz (funcionarios/alunos) preenchendo o usuario_id
+            if tabela_alvo and base_id:
+                sql_update_vinculo = f"UPDATE {tabela_alvo} SET usuario_id = %s WHERE id = %s"
+                cursor.execute(sql_update_vinculo, (novo_usuario_id, base_id))
+            
             conn.commit()
-            print(f"Usuário {username} cadastrado com sucesso!")
+            print(f"Usuário {username} cadastrado e vinculado com sucesso!")
         except Exception as e:
             print(f"Erro ao cadastrar usuário: {e}")
             return redirect(url_for('index', erro_cadastro="Erro interno ao tentar salvar o usuário."))
@@ -330,25 +355,28 @@ def cadastrar_usuario():
 def recuperar_senha():
     """
     Rota que gera senha provisória limpa (sem caracteres ambíguos), atualiza o banco e envia o e-mail real.
+    A busca agora utiliza o username como chave única, ignorando o perfil para evitar conflitos de herança de cargo.
     """
     perfil = request.form.get('perfil_recuperacao')
-    nome_completo = request.form.get('nome_completo_recuperacao')
+    username_recuperacao = request.form.get('username_recuperacao')
     
     conn = get_connection()
     if conn:
         try:
             cursor = conn.cursor()
             
-            # 1. Verifica se o usuário já tem acesso cadastrado no sistema
-            cursor.execute("SELECT id, username FROM usuarios WHERE nome_completo = %s AND perfil = %s LIMIT 1", (nome_completo, perfil))
+            # 1. Verifica se o usuário existe pesquisando apenas pelo username
+            cursor.execute("SELECT id, username, nome_completo FROM usuarios WHERE username = %s LIMIT 1", (username_recuperacao,))
             user_exist = cursor.fetchone()
             
             if not user_exist:
-                return redirect(url_for('index', erro_recuperacao="Usuário não possui acesso ao sistema."))
+                return redirect(url_for('index', erro_recuperacao="Usuário não encontrado ou sem acesso ao sistema."))
             
+            usuario_id = user_exist[0]
             username = user_exist[1]
+            nome_completo = user_exist[2]
             
-            # 2. Resgata o email real cadastrado na base (funcionários ou alunos)
+            # 2. Resgata o email real cadastrado na base, mapeando pela Chave Estrangeira (usuario_id)
             tabela_map = {
                 'funcionario': 'funcionarios',
                 'professor': 'funcionarios', 
@@ -359,7 +387,7 @@ def recuperar_senha():
             email_destino = None
             
             if tabela_alvo:
-                cursor.execute(f"SELECT email FROM {tabela_alvo} WHERE nome_completo = %s LIMIT 1", (nome_completo,))
+                cursor.execute(f"SELECT email FROM {tabela_alvo} WHERE usuario_id = %s LIMIT 1", (usuario_id,))
                 row = cursor.fetchone()
                 if row and row[0]:
                     email_destino = row[0]
@@ -430,20 +458,20 @@ def trocar_senha_obrigatoria():
 @app.route('/api/funcionarios/buscar', methods=['GET'])
 def buscar_funcionario():
     """
-    Rota API para buscar um funcionário pelo nome completo.
+    Rota API para buscar um funcionário utilizando o CPF como identificador estrutural único.
     Retorna JSON com os dados e o ID caso encontrado.
     """
-    nome = request.args.get('nome')
-    if not nome:
+    cpf = request.args.get('cpf')
+    if not cpf:
         return jsonify({'encontrado': False})
 
     conn = get_connection()
     if conn:
         try:
             cursor = conn.cursor()
-            # Adicionado o ID na busca SQL
-            sql = "SELECT id, email, telefone, cargo, status FROM funcionarios WHERE nome_completo = %s LIMIT 1"
-            cursor.execute(sql, (nome,))
+            # Busca segura focada no CPF
+            sql = "SELECT id, email, telefone, cargo, status, nome_completo FROM funcionarios WHERE cpf = %s LIMIT 1"
+            cursor.execute(sql, (cpf,))
             row = cursor.fetchone()
             
             if row:
@@ -454,7 +482,8 @@ def buscar_funcionario():
                         'email': row[1],
                         'telefone': row[2],
                         'cargo': row[3],
-                        'status': row[4]
+                        'status': row[4],
+                        'nome_completo': row[5]
                     }
                 })
         except Exception as e:
@@ -478,9 +507,10 @@ def novo_funcionario():
 def salvar_funcionario():
     """
     Rota responsável por receber os dados do formulário, verificar se possui ID 
-    e executar UPDATE ou INSERT no banco de dados.
+    e executar UPDATE ou INSERT no banco de dados, incluindo a coluna CPF.
     """
     funcionario_id = request.form.get('funcionario_id')
+    cpf = request.form.get('cpf')
     nome_completo = request.form.get('nome_completo')
     email = request.form.get('email')
     telefone = request.form.get('telefone')
@@ -495,19 +525,19 @@ def salvar_funcionario():
             if funcionario_id: # Se houver ID, executa UPDATE
                 sql = """
                     UPDATE funcionarios 
-                    SET nome_completo=%s, email=%s, telefone=%s, cargo=%s, status=%s 
+                    SET cpf=%s, nome_completo=%s, email=%s, telefone=%s, cargo=%s, status=%s 
                     WHERE id=%s
                 """
-                valores = (nome_completo, email, telefone, cargo, status, funcionario_id)
+                valores = (cpf, nome_completo, email, telefone, cargo, status, funcionario_id)
                 cursor.execute(sql, valores)
                 conn.commit()
                 print(f"Funcionário {nome_completo} atualizado com sucesso!")
             else: # Se não houver ID, executa INSERT
                 sql = """
-                    INSERT INTO funcionarios (nome_completo, email, telefone, cargo, status)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO funcionarios (cpf, nome_completo, email, telefone, cargo, status)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                 """
-                valores = (nome_completo, email, telefone, cargo, status)
+                valores = (cpf, nome_completo, email, telefone, cargo, status)
                 cursor.execute(sql, valores)
                 conn.commit()
                 print(f"Funcionário {nome_completo} salvo com sucesso!")
