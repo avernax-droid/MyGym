@@ -30,14 +30,19 @@
 # 05/08/26: Ajuste de usabilidade: limpeza de espaços (.strip()) no login e remoção de caracteres ambíguos na geração da senha provisória.
 # 05/08/26: Migração das validações de segurança e buscas para utilizar CPF e ID (usuario_id) em vez do nome em texto puro.
 # 05/08/26: Correção no cadastro de usuário para vincular o usuario_id na tabela raiz e herdar o cargo como perfil; ajuste na recuperação de senha.
+# 06/08/26: Criação das rotas para o Cadastro de Professores (/backoffice/professores/novo, /api/valida_professor_funcionario e /backoffice/professores/salvar) com validação de vínculo na tabela funcionários.
+# 07/08/26: Atualização nas queries de Professores para refletir os campos nome_emergencia, telefone_emergencia e remoção do status redundante.
+# 07/08/26: Implementação de upload de certificados no cadastro de professores e gravação do pathway no banco, inclusão da rota para buscar a foto_url do RH.
 # ==============================================================================
 
 import os
+import time
 from functools import wraps
 from flask import Flask, render_template, request, session, redirect, url_for, jsonify, make_response
 from dotenv import load_dotenv
 import re
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 import string
 import random
 import smtplib
@@ -548,6 +553,231 @@ def salvar_funcionario():
             conn.close()
             
     return redirect(url_for('novo_funcionario'))
+
+# ==============================================================================
+# ROTAS DO CADASTRO DE PROFESSORES
+# ==============================================================================
+
+@app.route('/backoffice/professores/novo')
+@requer_permissao('mod_cad_prof')
+def novo_professor():
+    """
+    Rota para exibir o formulário de cadastro de professores no backoffice.
+    """
+    return render_template('backoffice/cadastro_professor.html')
+
+@app.route('/api/valida_professor_funcionario', methods=['GET'])
+def valida_professor_funcionario():
+    """
+    Rota API que valida se um CPF pertence a um funcionário.
+    Se sim, verifica se já é um professor cadastrado e retorna os dados
+    para popular o formulário de cadastro ou edição.
+    """
+    cpf = request.args.get('cpf')
+    if not cpf:
+        return jsonify({'sucesso': False, 'msg': 'CPF não fornecido.'})
+
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            
+            # 1. Verifica na tabela funcionarios (Trazemos o status e foto do RH)
+            sql_func = "SELECT id, nome_completo, email, telefone, status, usuario_id, foto_url FROM funcionarios WHERE cpf = %s LIMIT 1"
+            cursor.execute(sql_func, (cpf,))
+            func = cursor.fetchone()
+            
+            if not func:
+                return jsonify({
+                    'sucesso': False, 
+                    'is_funcionario': False,
+                    'msg': 'Funcionário não encontrado. Cadastre no módulo de Funcionários primeiro.'
+                })
+            
+            func_id = func[0]
+            nome_completo = func[1]
+            email = func[2]
+            telefone = func[3]
+            status_rh = func[4]
+            usuario_id = func[5]
+            foto_url = func[6]
+
+            # 2. Verifica se já existe na tabela professores (Adequado para a nova estrutura)
+            sql_prof = """
+                SELECT id, sexo, data_nascimento, cep, endereco, bairro, cidade, uf, 
+                       whatsapp, nome_emergencia, telefone_emergencia, cref, modalidades, certificacoes, 
+                       data_admissao 
+                FROM professores WHERE cpf = %s LIMIT 1
+            """
+            cursor.execute(sql_prof, (cpf,))
+            prof = cursor.fetchone()
+            
+            if prof:
+                # Já é professor, retorna os dados para carregar o modo edição
+                return jsonify({
+                    'sucesso': True,
+                    'is_funcionario': True,
+                    'is_professor': True,
+                    'dados': {
+                        'funcionario_id': func_id,
+                        'usuario_id': usuario_id,
+                        'nome_completo': nome_completo,
+                        'email': email,
+                        'telefone': telefone,
+                        'status': status_rh, # Herdado sempre do RH
+                        'foto_url': foto_url, # Herdado sempre do RH
+                        'professor_id': prof[0],
+                        'sexo': prof[1],
+                        'data_nascimento': prof[2] if prof[2] else '',
+                        'cep': prof[3],
+                        'endereco': prof[4],
+                        'bairro': prof[5],
+                        'cidade': prof[6],
+                        'uf': prof[7],
+                        'whatsapp': prof[8],
+                        'nome_emergencia': prof[9],
+                        'telefone_emergencia': prof[10],
+                        'cref': prof[11],
+                        'modalidades': prof[12],
+                        'certificacoes': prof[13],
+                        'data_admissao': prof[14] if prof[14] else ''
+                    }
+                })
+            else:
+                # É funcionário, mas não é professor ainda (Cadastro Novo)
+                return jsonify({
+                    'sucesso': True,
+                    'is_funcionario': True,
+                    'is_professor': False,
+                    'dados': {
+                        'funcionario_id': func_id,
+                        'usuario_id': usuario_id,
+                        'nome_completo': nome_completo,
+                        'email': email,
+                        'whatsapp': telefone, # Pré-preenche o whatsapp baseando-se no telefone do RH
+                        'status': status_rh,
+                        'foto_url': foto_url # Herdado sempre do RH
+                    }
+                })
+                
+        except Exception as e:
+            print(f"Erro ao validar professor/funcionário via API: {e}")
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return jsonify({'sucesso': False, 'msg': 'Erro de conexão com o banco de dados.'})
+
+@app.route('/backoffice/professores/salvar', methods=['POST'])
+@requer_permissao('mod_cad_prof')
+def salvar_professor():
+    """
+    Rota responsável por receber os dados do formulário e gravar na tabela professores.
+    Realiza INSERT ou UPDATE com base na existência do professor_id.
+    """
+    professor_id = request.form.get('professor_id')
+    usuario_id = request.form.get('usuario_id') 
+    cpf = request.form.get('cpf')
+    nome_completo = request.form.get('nome_completo')
+    sexo = request.form.get('sexo')
+    data_nascimento = request.form.get('data_nascimento')
+    cep = request.form.get('cep')
+    endereco = request.form.get('endereco')
+    bairro = request.form.get('bairro')
+    cidade = request.form.get('cidade')
+    uf = request.form.get('uf')
+    whatsapp = request.form.get('whatsapp')
+    email = request.form.get('email')
+    nome_emergencia = request.form.get('nome_emergencia')
+    telefone_emergencia = request.form.get('telefone_emergencia')
+    cref = request.form.get('cref')
+    modalidades = request.form.get('modalidades')
+    certificacoes = request.form.get('certificacoes')
+    data_admissao = request.form.get('data_admissao')
+    
+    # Tratamento para datas vazias (para evitar erros de formatação no MySQL)
+    if not data_nascimento: 
+        data_nascimento = None
+    if not data_admissao: 
+        data_admissao = None
+        
+    # Se o funcionário ainda não tem usuário gerado no sistema, o usuario_id será vazio
+    if not usuario_id or usuario_id == 'None':
+        usuario_id = None
+        
+    # --- LÓGICA DE UPLOAD DO CERTIFICADO ---
+    certificado_arquivo = request.files.get('certificado_arquivo')
+    certificado_arquivo_url = None
+    
+    if certificado_arquivo and certificado_arquivo.filename != '':
+        # Cria a pasta caso não exista
+        upload_folder = os.path.join(app.root_path, 'static', 'uploads', 'certificados')
+        os.makedirs(upload_folder, exist_ok=True)
+        
+        # Gera um nome seguro para o arquivo evitando conflitos
+        extensao = os.path.splitext(certificado_arquivo.filename)[1]
+        cpf_limpo = re.sub(r'\D', '', cpf) if cpf else str(int(time.time()))
+        nome_seguro = secure_filename(f"{cpf_limpo}_{int(time.time())}_certificado{extensao}")
+        
+        caminho_fisico = os.path.join(upload_folder, nome_seguro)
+        certificado_arquivo.save(caminho_fisico)
+        
+        certificado_arquivo_url = f"/static/uploads/certificados/{nome_seguro}"
+    # ---------------------------------------
+        
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            
+            if professor_id: 
+                # UPDATE (Atualizado para a nova estrutura de dados com verificação do arquivo)
+                if certificado_arquivo_url:
+                    sql = """
+                        UPDATE professores 
+                        SET nome_completo=%s, sexo=%s, data_nascimento=%s, cep=%s, endereco=%s, 
+                            bairro=%s, cidade=%s, uf=%s, whatsapp=%s, email=%s, nome_emergencia=%s, telefone_emergencia=%s, 
+                            cref=%s, modalidades=%s, certificacoes=%s, data_admissao=%s, certificado_arquivo_url=%s
+                        WHERE id=%s
+                    """
+                    valores = (nome_completo, sexo, data_nascimento, cep, endereco, bairro, cidade, uf, 
+                               whatsapp, email, nome_emergencia, telefone_emergencia, cref, modalidades, certificacoes, 
+                               data_admissao, certificado_arquivo_url, professor_id)
+                else:
+                    sql = """
+                        UPDATE professores 
+                        SET nome_completo=%s, sexo=%s, data_nascimento=%s, cep=%s, endereco=%s, 
+                            bairro=%s, cidade=%s, uf=%s, whatsapp=%s, email=%s, nome_emergencia=%s, telefone_emergencia=%s, 
+                            cref=%s, modalidades=%s, certificacoes=%s, data_admissao=%s
+                        WHERE id=%s
+                    """
+                    valores = (nome_completo, sexo, data_nascimento, cep, endereco, bairro, cidade, uf, 
+                               whatsapp, email, nome_emergencia, telefone_emergencia, cref, modalidades, certificacoes, 
+                               data_admissao, professor_id)
+                cursor.execute(sql, valores)
+                print(f"Professor {nome_completo} atualizado com sucesso!")
+            else: 
+                # INSERT (Atualizado para a nova estrutura de dados e incluso a coluna do certificado)
+                sql = """
+                    INSERT INTO professores (usuario_id, nome_completo, sexo, data_nascimento, cpf, cep, endereco, 
+                                            bairro, cidade, uf, whatsapp, email, nome_emergencia, telefone_emergencia, cref, 
+                                            modalidades, certificacoes, data_admissao, certificado_arquivo_url)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                valores = (usuario_id, nome_completo, sexo, data_nascimento, cpf, cep, endereco, bairro, cidade, uf, 
+                           whatsapp, email, nome_emergencia, telefone_emergencia, cref, modalidades, certificacoes, data_admissao, certificado_arquivo_url)
+                cursor.execute(sql, valores)
+                print(f"Professor {nome_completo} cadastrado com sucesso!")
+                
+            conn.commit()
+        except Exception as e:
+            print(f"Erro ao salvar o professor no banco: {e}")
+            conn.rollback()
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return redirect(url_for('novo_professor'))
 
 # ==============================================================================
 # ROTAS DO CONTROLE DE ACESSOS E PERMISSÕES

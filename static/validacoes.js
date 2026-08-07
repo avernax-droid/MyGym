@@ -8,6 +8,7 @@
 //
 // HISTÓRICO DE ALTERAÇÕES:
 // 05/08/26: Criação do arquivo e migração das funções globais do cadastro.
+// 07/08/26: Inclusão das funções de máscara de CEP e busca de endereço via API (ViaCEP).
 // ==============================================================================
 
 // --- FUNÇÕES DE MÁSCARA E LIMPEZA ---
@@ -70,4 +71,48 @@ function validarCPF(cpf) {
     if (resto !== parseInt(cpf.substring(10, 11))) return false;
     
     return true;
+}
+
+// ==============================================================================
+// FUNÇÕES DE CEP E INTEGRAÇÃO VIACEP
+// ==============================================================================
+
+function aplicarMascaraCEP(input) {
+    let valor = input.value.replace(/\D/g, "");
+    if (valor.length > 8) valor = valor.slice(0, 8);
+    
+    if (valor.length > 5) {
+        valor = `${valor.slice(0, 5)}-${valor.slice(5)}`;
+    }
+    input.value = valor;
+}
+
+async function buscarEnderecoViaCEP(cep, mapaCampos) {
+    const cepLimpo = cep.replace(/\D/g, '');
+    
+    if (cepLimpo.length !== 8) return; // Só busca se o CEP estiver completo
+
+    try {
+        const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
+        const data = await response.json();
+
+        if (!data.erro) {
+            if (mapaCampos.endereco && document.getElementById(mapaCampos.endereco)) {
+                document.getElementById(mapaCampos.endereco).value = data.logradouro || '';
+            }
+            if (mapaCampos.bairro && document.getElementById(mapaCampos.bairro)) {
+                document.getElementById(mapaCampos.bairro).value = data.bairro || '';
+            }
+            if (mapaCampos.cidade && document.getElementById(mapaCampos.cidade)) {
+                document.getElementById(mapaCampos.cidade).value = data.localidade || '';
+            }
+            if (mapaCampos.uf && document.getElementById(mapaCampos.uf)) {
+                document.getElementById(mapaCampos.uf).value = data.uf || '';
+            }
+        } else {
+            console.warn("CEP não encontrado.");
+        }
+    } catch (error) {
+        console.error("Erro ao buscar CEP na API ViaCEP:", error);
+    }
 }
