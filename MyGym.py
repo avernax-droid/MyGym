@@ -1,6 +1,6 @@
 # ==============================================================================
 # PROJETO: MyGym
-# MÓDULO: server.py
+# MÓDULO: MyGym.py
 # DATA DE CRIAÇÃO: 26/07/30
 # TÍTULO: Servidor Principal (Motor e Roteamento)
 # FUNÇÃO: Inicializar a aplicação Flask, gerenciar a sessão dos usuários e executar o roteamento de templates com base na análise do User-Agent (Desktop vs Mobile).
