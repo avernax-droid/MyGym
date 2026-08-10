@@ -37,6 +37,8 @@
 # 08/08/26: Rota do Professor otimizada para gravar apenas dados pedagógicos, vinculando-se via 'funcionario_id' ao RH. API AJAX reestruturada.
 # 08/08/26: Remoção de máscaras (hífens) das datas na inserção do funcionário.
 # 08/08/26: Migração para suporte a múltiplos certificados via tabela 'professor_certificados'.
+# 10/08/26: Inclusão das rotas de cadastro, busca e persistência para Alunos.
+# 10/08/26: Aprimoramento da API de busca de alunos para suportar localização via CPF do responsável com suporte a múltiplos vínculos (irmãos).
 # ==============================================================================
 
 import os
@@ -60,46 +62,32 @@ from database.connection import get_connection
 load_dotenv()
 
 app = Flask(__name__)
-app.config['TEMPLATES_AUTO_RELOAD'] = True # Força a recarga de templates em ambiente de desenvolvimento
-# Agora a chave de segurança é lida do arquivo .env
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.secret_key = os.getenv('SECRET_KEY', 'chave_padrao_fallback')
 
 def is_mobile(req):
-    """
-    Função auxiliar que analisa os cabeçalhos HTTP da requisição.
-    Retorna True se identificar um dispositivo móvel, False para Desktop.
-    """
-    # Verificação primária: cabeçalho moderno do Chromium (ex: enviado pelo Chrome via Ngrok)
     sec_mobile = req.headers.get('Sec-Ch-Ua-Mobile')
     if sec_mobile == '?1':
         return True
 
-    # Verificação secundária: leitura direta da string bruta do User-Agent
     ua_string = req.headers.get('User-Agent', '').lower()
     if not ua_string:
         return False
     
-    # Validação blindada e direta na string (sem depender da biblioteca re)
     if 'mobi' in ua_string or 'android' in ua_string or 'iphone' in ua_string:
         return True
         
     return False
 
 def requer_permissao(modulo):
-    """
-    Decorador para proteger as rotas. Verifica se o perfil logado tem acesso ao módulo
-    especificado ou se possui a chave mestra 'mod_free'.
-    """
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
             perfil = session.get('perfil')
             
-            # Se não estiver logado, redireciona para a capa
             if not perfil:
                 return redirect(url_for('index'))
             
-            # O admin master tem acesso irrestrito
             if perfil == 'admin':
                 return f(*args, **kwargs)
             
@@ -107,7 +95,6 @@ def requer_permissao(modulo):
             if conn:
                 try:
                     cursor = conn.cursor()
-                    # Verifica se o cargo tem acesso ao módulo solicitado OU ao módulo Free
                     sql = """
                         SELECT pode_acessar FROM permissoes_cargo 
                         WHERE cargo = %s AND (modulo = %s OR modulo = 'mod_free')
@@ -129,15 +116,11 @@ def requer_permissao(modulo):
                     cursor.close()
                     conn.close()
 
-            # Se não tiver acesso, bloqueia e retorna para a home
             return redirect(url_for('index'))
         return decorated_function
     return decorator
 
 def enviar_email_recuperacao(email_destino, nome, username, senha_provisoria):
-    """
-    Função auxiliar para envio de e-mail de recuperação utilizando SMTP.
-    """
     smtp_host = os.getenv('EMAIL_HOST')
     smtp_port = int(os.getenv('EMAIL_PORT', 587))
     smtp_user = os.getenv('EMAIL_USER')
@@ -177,49 +160,36 @@ Equipe MyGym"""
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
-    """
-    Rota principal. Processa o login via POST e direciona para o template adequado com base no dispositivo.
-    """
     if request.method == 'POST':
-        # Aplica .strip() para evitar falhas geradas por espaços em branco acidentais ao colar a senha
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '').strip()
         
-        # Validação do Usuário Master (Seed) conforme a Especificação V4
         if username == 'admin' and password == 'admin#123':
             session['perfil'] = 'admin'
             session['nome_completo'] = 'Administrador Master'
-            # O master sempre recebe a chave mestra na sessão
             session['permissoes'] = {'mod_free': True}
             return redirect(url_for('index'))
         else:
-            # Validação via banco de dados para os demais usuários
             conn = get_connection()
             if conn:
                 try:
                     cursor = conn.cursor()
-                    # Adicionado senha_provisoria na query
                     sql = "SELECT password_hash, perfil, nome_completo, senha_provisoria FROM usuarios WHERE username = %s AND status = 'ativo'"
                     cursor.execute(sql, (username,))
                     usuario = cursor.fetchone()
                     
                     if usuario and check_password_hash(usuario[0], password):
-                        # Se tiver senha provisória, bloqueia sessão e envia flag para trocar senha
                         if usuario[3] == 1:
                             return redirect(url_for('index', force_reset='true', reset_user=username))
                         
                         session['perfil'] = usuario[1]
                         session['nome_completo'] = usuario[2]
                         
-                        # --- CARGA DINÂMICA DE PERMISSÕES NA SESSÃO ---
-                        # Busca todos os módulos que este perfil tem permissão (pode_acessar = 1)
                         sql_permissoes = "SELECT modulo FROM permissoes_cargo WHERE cargo = %s AND pode_acessar = 1"
                         cursor.execute(sql_permissoes, (usuario[1],))
                         perms = cursor.fetchall()
                         
-                        # Transforma o resultado em um dicionário para acesso fácil no Jinja2 (HTML)
                         session['permissoes'] = {p[0]: True for p in perms}
-                        # ----------------------------------------------
                         
                         return redirect(url_for('index'))
                 except Exception as e:
@@ -228,22 +198,15 @@ def index():
                     cursor.close()
                     conn.close()
 
-            # Falha de autenticação (recarrega a página inicial por segurança)
             return redirect(url_for('index', erro_login='Credenciais inválidas.'))
 
-    # Captura o User-Agent bruto direto dos headers para o log
-    user_agent_str = request.headers.get('User-Agent', 'Desconhecido')
-    # Passa o objeto request inteiro para nossa nova função
     mobile = is_mobile(request)
     
     if mobile:
-        # Entrega a versão fluida focada em usabilidade touch
         resp = make_response(render_template('mobile/cover.html'))
     else:
-        # Renderiza o cover do desktop que herda o base.html e injeta o conteúdo central
         resp = make_response(render_template('cover.html'))
         
-    # Injeção de headers para bloquear o uso de cache em navegadores móveis
     resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
     resp.headers['Pragma'] = 'no-cache'
     resp.headers['Expires'] = '0'
@@ -252,32 +215,21 @@ def index():
 
 @app.route('/logout')
 def logout():
-    """
-    Rota responsável por encerrar a sessão do usuário, limpando os cookies e redirecionando para a capa.
-    """
     session.clear()
     return redirect(url_for('index'))
 
 @app.route('/toggle-admin')
 def toggle_admin():
-    """
-    Rota de conveniência para testes de desenvolvimento.
-    """
     if session.get('perfil') == 'admin':
         session.pop('perfil', None)
     else:
         session['perfil'] = 'admin'
-        session['permissoes'] = {'mod_free': True} # Atualiza a chave mestra no toggle
+        session['permissoes'] = {'mod_free': True}
         
     return redirect(url_for('index'))
 
 @app.route('/cadastrar_usuario', methods=['POST'])
 def cadastrar_usuario():
-    """
-    Rota responsável por receber os dados do modal de Cadastro de Primeiro Acesso
-    e inserir na tabela `usuarios`, validando antes se o registro existe na base raiz via CPF,
-    garantindo que o vínculo (usuario_id) seja preenchido na tabela de origem.
-    """
     perfil_form = request.form.get('perfil_acesso')
     cpf = request.form.get('cpf')
     nome_completo = request.form.get('nome_completo')
@@ -293,7 +245,6 @@ def cadastrar_usuario():
         try:
             cursor = conn.cursor()
             
-            # --- VALIDAÇÃO DE EXISTÊNCIA E CAPTURA DO CARGO REAL ---
             tabela_map = {
                 'funcionario': 'funcionarios',
                 'professor': 'funcionarios',
@@ -302,10 +253,9 @@ def cadastrar_usuario():
             
             tabela_alvo = tabela_map.get(perfil_form)
             base_id = None
-            perfil_final = perfil_form # Fallback inicial
+            perfil_final = perfil_form
             
             if tabela_alvo:
-                # Busca o ID na base raiz, e se for funcionário, traz também o cargo
                 if tabela_alvo == 'funcionarios':
                     sql_check = f"SELECT id, cargo FROM {tabela_alvo} WHERE cpf = %s LIMIT 1"
                 else:
@@ -319,7 +269,6 @@ def cadastrar_usuario():
                         return redirect(url_for('index', erro_cadastro=msg_erro))
                     
                     base_id = existe[0]
-                    # Sobrescreve o perfil genérico pelo cargo real para garantir as permissões
                     if tabela_alvo == 'funcionarios':
                         perfil_final = existe[1]
                         
@@ -327,12 +276,9 @@ def cadastrar_usuario():
                     print(f"Erro ao verificar existência na tabela {tabela_alvo}: {e}")
                     msg_erro = f"Não foi possível validar o cadastro de {perfil_form.capitalize()}. Verifique com o administrador."
                     return redirect(url_for('index', erro_cadastro=msg_erro))
-            # --------------------------------------------
 
-            # Criptografa a senha antes de salvar no banco
             password_hash = generate_password_hash(senha)
 
-            # Salva na tabela usuarios com o perfil correto (ex: 'gerente')
             sql = """
                 INSERT INTO usuarios (username, password_hash, perfil, status, nome_completo, senha_provisoria)
                 VALUES (%s, %s, %s, %s, %s, %s)
@@ -340,10 +286,8 @@ def cadastrar_usuario():
             valores = (username, password_hash, perfil_final, 'ativo', nome_completo, 0)
             cursor.execute(sql, valores)
             
-            # Captura o ID auto incremental que acabou de ser gerado para o usuário
             novo_usuario_id = cursor.lastrowid
             
-            # Criação do vínculo relacional: Atualiza a base raiz (funcionarios/alunos) preenchendo o usuario_id
             if tabela_alvo and base_id:
                 sql_update_vinculo = f"UPDATE {tabela_alvo} SET usuario_id = %s WHERE id = %s"
                 cursor.execute(sql_update_vinculo, (novo_usuario_id, base_id))
@@ -357,15 +301,10 @@ def cadastrar_usuario():
             cursor.close()
             conn.close()
             
-    # Redireciona de volta passando o parâmetro para exibir o login automaticamente
     return redirect(url_for('index', show_login='true'))
 
 @app.route('/recuperar_senha', methods=['POST'])
 def recuperar_senha():
-    """
-    Rota que gera senha provisória limpa (sem caracteres ambíguos), atualiza o banco e envia o e-mail real.
-    A busca agora utiliza o username como chave única, ignorando o perfil para evitar conflitos de herança de cargo.
-    """
     perfil = request.form.get('perfil_recuperacao')
     username_recuperacao = request.form.get('username_recuperacao')
     
@@ -374,7 +313,6 @@ def recuperar_senha():
         try:
             cursor = conn.cursor()
             
-            # 1. Verifica se o usuário existe pesquisando apenas pelo username
             cursor.execute("SELECT id, username, nome_completo FROM usuarios WHERE username = %s LIMIT 1", (username_recuperacao,))
             user_exist = cursor.fetchone()
             
@@ -385,7 +323,6 @@ def recuperar_senha():
             username = user_exist[1]
             nome_completo = user_exist[2]
             
-            # 2. Resgata o email real cadastrado na base, mapeando pela Chave Estrangeira (usuario_id)
             tabela_map = {
                 'funcionario': 'funcionarios',
                 'professor': 'funcionarios', 
@@ -404,16 +341,13 @@ def recuperar_senha():
             if not email_destino:
                 return redirect(url_for('index', erro_recuperacao="Usuário sem e-mail cadastrado. Contate a secretaria."))
 
-            # 3. Gera a senha provisória sem caracteres ambíguos (exclui 0, O, 1, l, I) para facilitar a leitura visual
             caracteres_seguros = "23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz"
             senha_provisoria = ''.join(random.choice(caracteres_seguros) for i in range(8))
             password_hash = generate_password_hash(senha_provisoria)
             
-            # 4. Atualiza o banco, ativando a flag de bloqueio/provisória
             cursor.execute("UPDATE usuarios SET password_hash = %s, senha_provisoria = 1 WHERE username = %s", (password_hash, username))
             conn.commit()
             
-            # 5. Envia o e-mail real
             sucesso = enviar_email_recuperacao(email_destino, nome_completo, username, senha_provisoria)
             
             if sucesso:
@@ -432,9 +366,6 @@ def recuperar_senha():
 
 @app.route('/trocar_senha_obrigatoria', methods=['POST'])
 def trocar_senha_obrigatoria():
-    """
-    Rota ativada quando o usuário entra com uma senha provisória e cadastra a nova.
-    """
     username = request.form.get('reset_user')
     nova_senha = request.form.get('nova_senha', '').strip()
     confirma_senha = request.form.get('confirma_senha', '').strip()
@@ -447,7 +378,6 @@ def trocar_senha_obrigatoria():
         try:
             cursor = conn.cursor()
             
-            # Gera o hash da senha definitiva e zera a flag provisória
             password_hash = generate_password_hash(nova_senha)
             cursor.execute("UPDATE usuarios SET password_hash = %s, senha_provisoria = 0 WHERE username = %s", (password_hash, username))
             conn.commit()
@@ -466,10 +396,6 @@ def trocar_senha_obrigatoria():
 
 @app.route('/api/funcionarios/buscar', methods=['GET'])
 def buscar_funcionario():
-    """
-    Rota API para buscar um funcionário utilizando o CPF como identificador estrutural único.
-    Retorna JSON com os dados e o ID caso encontrado.
-    """
     cpf = request.args.get('cpf')
     if not cpf:
         return jsonify({'encontrado': False})
@@ -478,7 +404,6 @@ def buscar_funcionario():
     if conn:
         try:
             cursor = conn.cursor()
-            # Busca ampliada para incluir os novos campos centralizados
             sql = """
                 SELECT id, email, telefone, cargo, status, nome_completo, sexo, 
                        data_nascimento, cep, endereco, bairro, cidade, uf, data_inicio, foto_url 
@@ -519,18 +444,11 @@ def buscar_funcionario():
 @app.route('/backoffice/funcionarios/novo')
 @requer_permissao('mod_cad_func')
 def novo_funcionario():
-    """
-    Rota para exibir o formulário de cadastro de novos funcionários no backoffice.
-    """
     return render_template('backoffice/cadastro_funcionario.html')
 
 @app.route('/backoffice/funcionarios/salvar', methods=['POST'])
 @requer_permissao('mod_cad_func')
 def salvar_funcionario():
-    """
-    Rota responsável por receber os dados do formulário, verificar se possui ID 
-    e executar UPDATE ou INSERT no banco de dados, incluindo a coluna CPF e upload da foto.
-    """
     funcionario_id = request.form.get('funcionario_id')
     cpf = request.form.get('cpf')
     nome_completo = request.form.get('nome_completo')
@@ -547,7 +465,6 @@ def salvar_funcionario():
     data_inicio = request.form.get('data_inicio')
     status = request.form.get('status')
     
-    # Tratamento para datas vazias e remoção da máscara (hífens)
     if data_nascimento: 
         data_nascimento = data_nascimento.replace('-', '')
     else: 
@@ -558,7 +475,6 @@ def salvar_funcionario():
     else: 
         data_inicio = None
     
-    # --- UPLOAD DA FOTO DO FUNCIONÁRIO ---
     foto_arquivo = request.files.get('foto_arquivo')
     foto_url = None
     
@@ -574,14 +490,13 @@ def salvar_funcionario():
         foto_arquivo.save(caminho_fisico)
         
         foto_url = f"/static/uploads/fotos/{nome_seguro}"
-    # -------------------------------------
     
     conn = get_connection()
     if conn:
         try:
             cursor = conn.cursor()
             
-            if funcionario_id: # UPDATE
+            if funcionario_id:
                 if foto_url:
                     sql = """
                         UPDATE funcionarios 
@@ -605,9 +520,7 @@ def salvar_funcionario():
                 
                 cursor.execute(sql, valores)
                 conn.commit()
-                print(f"Funcionário {nome_completo} atualizado com sucesso!")
-                
-            else: # INSERT
+            else:
                 sql = """
                     INSERT INTO funcionarios (cpf, nome_completo, sexo, data_nascimento, email, 
                                              telefone, cep, endereco, bairro, cidade, uf, 
@@ -618,7 +531,6 @@ def salvar_funcionario():
                            endereco, bairro, cidade, uf, cargo, data_inicio, status, foto_url)
                 cursor.execute(sql, valores)
                 conn.commit()
-                print(f"Funcionário {nome_completo} salvo com sucesso!")
                 
         except Exception as e:
             print(f"Erro ao salvar o funcionário no banco: {e}")
@@ -635,18 +547,10 @@ def salvar_funcionario():
 @app.route('/backoffice/professores/novo')
 @requer_permissao('mod_cad_prof')
 def novo_professor():
-    """
-    Rota para exibir o formulário de cadastro de professores no backoffice.
-    """
     return render_template('backoffice/cadastro_professor.html')
 
 @app.route('/api/valida_professor_funcionario', methods=['GET'])
 def valida_professor_funcionario():
-    """
-    Rota API que valida se um CPF pertence a um funcionário.
-    Se sim, verifica se já é um professor cadastrado e retorna os dados
-    junto com a lista de certificados cadastrados para popular o formulário.
-    """
     cpf = request.args.get('cpf')
     if not cpf:
         return jsonify({'sucesso': False, 'msg': 'CPF não fornecido.'})
@@ -656,7 +560,6 @@ def valida_professor_funcionario():
         try:
             cursor = conn.cursor()
             
-            # 1. Busca os dados consolidados no RH
             sql_func = """
                 SELECT id, nome_completo, email, telefone, status, usuario_id, foto_url, 
                        sexo, data_inicio 
@@ -674,7 +577,6 @@ def valida_professor_funcionario():
             
             func_id = func[0]
             
-            # 2. Verifica vínculo na tabela de professores através do ID
             sql_prof = """
                 SELECT id, nome_emergencia, telefone_emergencia, cref, modalidades, certificacoes
                 FROM professores WHERE funcionario_id = %s LIMIT 1
@@ -684,19 +586,11 @@ def valida_professor_funcionario():
             
             if prof:
                 prof_id = prof[0]
-                
-                # 3. Busca todos os certificados cadastrados para este professor na tabela filha
                 sql_certs = "SELECT id, arquivo_url, nome_original FROM professor_certificados WHERE professor_id = %s"
                 cursor.execute(sql_certs, (prof_id,))
                 certs_rows = cursor.fetchall()
                 
-                certificados_lista = []
-                for c in certs_rows:
-                    certificados_lista.append({
-                        'id': c[0],
-                        'arquivo_url': c[1],
-                        'nome_original': c[2]
-                    })
+                certificados_lista = [{'id': c[0], 'arquivo_url': c[1], 'nome_original': c[2]} for c in certs_rows]
                 
                 return jsonify({
                     'sucesso': True,
@@ -712,7 +606,6 @@ def valida_professor_funcionario():
                         'foto_url': func[6], 
                         'sexo': func[7],
                         'data_inicio': str(func[8]) if func[8] else '',
-                        
                         'professor_id': prof_id,
                         'nome_emergencia': prof[1],
                         'telefone_emergencia': prof[2],
@@ -751,12 +644,8 @@ def valida_professor_funcionario():
 @app.route('/backoffice/professores/salvar', methods=['POST'])
 @requer_permissao('mod_cad_prof')
 def salvar_professor():
-    """
-    Rota responsável por receber os dados do formulário e gravar na tabela professores
-    e múltiplos certificados na tabela professor_certificados.
-    """
     professor_id = request.form.get('professor_id')
-    cpf = request.form.get('cpf') # Usado apenas para descobrir o ID raiz
+    cpf = request.form.get('cpf')
     nome_emergencia = request.form.get('nome_emergencia')
     telefone_emergencia = request.form.get('telefone_emergencia')
     cref = request.form.get('cref')
@@ -768,18 +657,15 @@ def salvar_professor():
         try:
             cursor = conn.cursor()
             
-            # Descobre o funcionario_id e usuario_id atualizados baseados no CPF
             cursor.execute("SELECT id, usuario_id FROM funcionarios WHERE cpf = %s LIMIT 1", (cpf,))
             func_data = cursor.fetchone()
             if not func_data:
-                print("Erro: Tentativa de salvar professor com CPF inexistente no RH.")
                 return redirect(url_for('novo_professor'))
                 
             funcionario_id = func_data[0]
             usuario_id = func_data[1]
             
             if professor_id: 
-                # UPDATE focado apenas em dados pedagógicos
                 sql = """
                     UPDATE professores 
                     SET nome_emergencia=%s, telefone_emergencia=%s, cref=%s, 
@@ -788,10 +674,7 @@ def salvar_professor():
                 """
                 valores = (nome_emergencia, telefone_emergencia, cref, modalidades, certificacoes, professor_id)
                 cursor.execute(sql, valores)
-                print("Dados pedagógicos atualizados com sucesso!")
-                
             else: 
-                # INSERT amarrado pelo funcionario_id
                 sql = """
                     INSERT INTO professores (funcionario_id, usuario_id, nome_emergencia, telefone_emergencia, 
                                             cref, modalidades, certificacoes)
@@ -801,9 +684,7 @@ def salvar_professor():
                            cref, modalidades, certificacoes)
                 cursor.execute(sql, valores)
                 professor_id = cursor.lastrowid
-                print("Professor vinculado e cadastrado com sucesso!")
             
-            # --- LÓGICA DE UPLOAD DE MÚLTIPLOS CERTIFICADOS ---
             arquivos_certificados = request.files.getlist('certificado_arquivo')
             if arquivos_certificados:
                 upload_folder = os.path.join(app.root_path, 'static', 'uploads', 'certificados')
@@ -825,7 +706,6 @@ def salvar_professor():
                             VALUES (%s, %s, %s)
                         """
                         cursor.execute(sql_cert, (professor_id, certificado_arquivo_url, cert_arq.filename))
-            # -------------------------------------------------
                 
             conn.commit()
         except Exception as e:
@@ -838,22 +718,259 @@ def salvar_professor():
     return redirect(url_for('novo_professor'))
 
 # ==============================================================================
+# ROTAS DO CADASTRO DE ALUNOS
+# ==============================================================================
+
+@app.route('/backoffice/alunos/novo')
+@requer_permissao('mod_cad_aluno')
+def novo_aluno():
+    return render_template('backoffice/cadastro_aluno.html')
+
+@app.route('/api/alunos/buscar', methods=['GET'])
+def buscar_aluno():
+    termo = request.args.get('termo')
+    if not termo:
+        return jsonify({'encontrado': False, 'msg': 'Termo não fornecido.'})
+    
+    termo_limpo = re.sub(r'\D', '', termo)
+    
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            
+            # 1. Tentar buscar direto pelo ID do aluno ou CPF do aluno
+            sql_aluno = """
+                SELECT id, usuario_id, responsavel_id, nome_completo, cpf, data_nascimento, 
+                       sexo, email, telefone, foto_url, observacoes_medicas, 
+                       exame_medico_data, exame_medico_validade 
+                FROM alunos WHERE id = %s OR cpf = %s LIMIT 1
+            """
+            cursor.execute(sql_aluno, (termo, termo_limpo))
+            aluno = cursor.fetchone()
+            
+            alunos_encontrados = []
+            
+            if aluno:
+                alunos_encontrados.append(aluno)
+            else:
+                # 2. Se não achou, tentar buscar pelo CPF do Responsável
+                sql_resp = "SELECT id FROM responsaveis WHERE cpf = %s LIMIT 1"
+                cursor.execute(sql_resp, (termo_limpo,))
+                resp = cursor.fetchone()
+                
+                if resp:
+                    resp_id = resp[0]
+                    sql_alunos_resp = """
+                        SELECT id, usuario_id, responsavel_id, nome_completo, cpf, data_nascimento, 
+                               sexo, email, telefone, foto_url, observacoes_medicas, 
+                               exame_medico_data, exame_medico_validade 
+                        FROM alunos WHERE responsavel_id = %s
+                    """
+                    cursor.execute(sql_alunos_resp, (resp_id,))
+                    alunos_encontrados = cursor.fetchall()
+            
+            if not alunos_encontrados:
+                return jsonify({'encontrado': False, 'msg': 'Nenhum registro encontrado.'})
+            
+            # Se houver múltiplos alunos (irmãos vinculados ao mesmo responsável)
+            if len(alunos_encontrados) > 1:
+                lista_multiplos = []
+                for a in alunos_encontrados:
+                    lista_multiplos.append({
+                        'id': a[0],
+                        'nome_completo': a[3],
+                        'data_nascimento': str(a[5]) if a[5] else '',
+                        'cpf': a[4] or 'Não cadastrado'
+                    })
+                return jsonify({
+                    'encontrado': True,
+                    'multiplos': True,
+                    'alunos': lista_multiplos
+                })
+            
+            # Se encontrou apenas um aluno
+            aluno = alunos_encontrados[0]
+            aluno_id = aluno[0]
+            resp_id = aluno[2]
+            
+            resp_data = None
+            if resp_id:
+                cursor.execute("SELECT id, nome_completo, cpf, telefone, cep, endereco, bairro, cidade, uf FROM responsaveis WHERE id = %s LIMIT 1", (resp_id,))
+                r = cursor.fetchone()
+                if r:
+                    resp_data = {
+                        'id': r[0], 'nome_completo': r[1], 'cpf': r[2], 'telefone': r[3],
+                        'cep': r[4], 'endereco': r[5], 'bairro': r[6], 'cidade': r[7], 'uf': r[8]
+                    }
+                    
+            cursor.execute("""
+                SELECT c.nome_completo, c.telefone, c.tipo 
+                FROM contatos c
+                JOIN aluno_contatos ac ON c.id = ac.contato_id
+                WHERE ac.aluno_id = %s
+            """, (aluno_id,))
+            contatos_rows = cursor.fetchall()
+            contatos_lista = [{'nome_completo': row[0], 'telefone': row[1], 'tipo': row[2]} for row in contatos_rows]
+            
+            return jsonify({
+                'encontrado': True,
+                'multiplos': False,
+                'dados': {
+                    'id': aluno[0],
+                    'usuario_id': aluno[1],
+                    'responsavel_id': aluno[2],
+                    'nome_completo': aluno[3],
+                    'cpf': aluno[4],
+                    'data_nascimento': str(aluno[5]) if aluno[5] else '',
+                    'sexo': aluno[6],
+                    'email': aluno[7],
+                    'telefone': aluno[8],
+                    'foto_url': aluno[9],
+                    'observacoes_medicas': aluno[10],
+                    'exame_medico_data': str(aluno[11]) if aluno[11] else '',
+                    'exame_medico_validade': str(aluno[12]) if aluno[12] else '',
+                    'responsavel': resp_data,
+                    'contatos': contatos_lista
+                }
+            })
+        except Exception as e:
+            print(f"Erro ao buscar aluno via API: {e}")
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return jsonify({'encontrado': False, 'msg': 'Erro de conexão com o banco.'})
+
+@app.route('/backoffice/alunos/salvar', methods=['POST'])
+@requer_permissao('mod_cad_aluno')
+def salvar_aluno():
+    aluno_id = request.form.get('aluno_id')
+    nome_completo = request.form.get('nome_completo')
+    cpf = request.form.get('cpf')
+    data_nascimento = request.form.get('data_nascimento')
+    sexo = request.form.get('sexo')
+    email = request.form.get('email')
+    telefone = request.form.get('telefone')
+    observacoes_medicas = request.form.get('observacoes_medicas')
+    exame_medico_data = request.form.get('exame_medico_data')
+    exame_medico_validade = request.form.get('exame_medico_validade')
+    
+    if not data_nascimento: data_nascimento = None
+    if not exame_medico_data: exame_medico_data = None
+    if not exame_medico_validade: exame_medico_validade = None
+    
+    resp_id = request.form.get('responsavel_id')
+    resp_nome = request.form.get('resp_nome')
+    resp_cpf = request.form.get('resp_cpf')
+    resp_telefone = request.form.get('resp_telefone')
+    resp_cep = request.form.get('resp_cep')
+    resp_endereco = request.form.get('resp_endereco')
+    resp_bairro = request.form.get('resp_bairro')
+    resp_cidade = request.form.get('resp_cidade')
+    resp_uf = request.form.get('resp_uf')
+    
+    foto_arquivo = request.files.get('foto_arquivo')
+    foto_url = None
+    if foto_arquivo and foto_arquivo.filename != '':
+        upload_folder = os.path.join(app.root_path, 'static', 'uploads', 'alunos_fotos')
+        os.makedirs(upload_folder, exist_ok=True)
+        extensao = os.path.splitext(foto_arquivo.filename)[1]
+        identificador = re.sub(r'\D', '', cpf) if cpf else str(int(time.time()))
+        nome_seguro = secure_filename(f"aluno_{identificador}_{int(time.time())}{extensao}")
+        caminho_fisico = os.path.join(upload_folder, nome_seguro)
+        foto_arquivo.save(caminho_fisico)
+        foto_url = f"/static/uploads/alunos_fotos/{nome_seguro}"
+    
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            
+            responsavel_id_final = None
+            if resp_nome and resp_nome.strip() != '':
+                if resp_id:
+                    sql_resp_up = """
+                        UPDATE responsaveis 
+                        SET nome_completo=%s, cpf=%s, telefone=%s, cep=%s, endereco=%s, bairro=%s, cidade=%s, uf=%s
+                        WHERE id=%s
+                    """
+                    cursor.execute(sql_resp_up, (resp_nome, resp_cpf, resp_telefone, resp_cep, resp_endereco, resp_bairro, resp_cidade, resp_uf, resp_id))
+                    responsavel_id_final = resp_id
+                else:
+                    sql_resp_ins = """
+                        INSERT INTO responsaveis (nome_completo, cpf, telefone, cep, endereco, bairro, cidade, uf)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """
+                    cursor.execute(sql_resp_ins, (resp_nome, resp_cpf, resp_telefone, resp_cep, resp_endereco, resp_bairro, resp_cidade, resp_uf))
+                    responsavel_id_final = cursor.lastrowid
+            
+            if aluno_id:
+                if foto_url:
+                    sql_aluno = """
+                        UPDATE alunos 
+                        SET responsavel_id=%s, nome_completo=%s, cpf=%s, data_nascimento=%s, sexo=%s, 
+                            email=%s, telefone=%s, foto_url=%s, observacoes_medicas=%s, 
+                            exame_medico_data=%s, exame_medico_validade=%s
+                        WHERE id=%s
+                    """
+                    cursor.execute(sql_aluno, (responsavel_id_final, nome_completo, cpf, data_nascimento, sexo, email, telefone, foto_url, observacoes_medicas, exame_medico_data, exame_medico_validade, aluno_id))
+                else:
+                    sql_aluno = """
+                        UPDATE alunos 
+                        SET responsavel_id=%s, nome_completo=%s, cpf=%s, data_nascimento=%s, sexo=%s, 
+                            email=%s, telefone=%s, observacoes_medicas=%s, 
+                            exame_medico_data=%s, exame_medico_validade=%s
+                        WHERE id=%s
+                    """
+                    cursor.execute(sql_aluno, (responsavel_id_final, nome_completo, cpf, data_nascimento, sexo, email, telefone, observacoes_medicas, exame_medico_data, exame_medico_validade, aluno_id))
+            else:
+                sql_aluno = """
+                    INSERT INTO alunos (responsavel_id, nome_completo, cpf, data_nascimento, sexo, 
+                                       email, telefone, foto_url, observacoes_medicas, 
+                                       exame_medico_data, exame_medico_validade)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                """
+                cursor.execute(sql_aluno, (responsavel_id_final, nome_completo, cpf, data_nascimento, sexo, email, telefone, foto_url, observacoes_medicas, exame_medico_data, exame_medico_validade))
+                aluno_id = cursor.lastrowid
+                
+            cursor.execute("DELETE FROM aluno_contatos WHERE aluno_id = %s", (aluno_id,))
+            
+            nomes_contato = request.form.getlist('contato_nome[]')
+            telefones_contato = request.form.getlist('contato_telefone[]')
+            tipos_contato = request.form.getlist('contato_tipo[]')
+            
+            for i in range(len(nomes_contato)):
+                c_nome = nomes_contato[i].strip()
+                c_tel = telefones_contato[i].strip()
+                c_tipo = tipos_contato[i].strip()
+                
+                if c_nome and c_tel:
+                    cursor.execute("INSERT INTO contatos (nome_completo, telefone, tipo) VALUES (%s, %s, %s)", (c_nome, c_tel, c_tipo))
+                    c_id = cursor.lastrowid
+                    cursor.execute("INSERT INTO aluno_contatos (aluno_id, contato_id) VALUES (%s, %s)", (aluno_id, c_id))
+                    
+            conn.commit()
+        except Exception as e:
+            print(f"Erro ao salvar aluno no banco: {e}")
+            conn.rollback()
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return redirect(url_for('novo_aluno'))
+
+# ==============================================================================
 # ROTAS DO CONTROLE DE ACESSOS E PERMISSÕES
 # ==============================================================================
 
 @app.route('/backoffice/permissoes')
 @requer_permissao('mod_cad_perm')
 def controles_de_acesso():
-    """
-    Renderiza a interface do Controle de Acessos.
-    """
     return render_template('backoffice/permissoes.html')
 
 @app.route('/api/permissoes/buscar', methods=['GET'])
 def buscar_permissoes():
-    """
-    Rota API que busca no banco de dados todas as permissões cadastradas para um cargo específico.
-    """
     cargo = request.args.get('cargo')
     if not cargo:
         return jsonify({'sucesso': False, 'msg': 'Cargo não informado.'})
@@ -866,7 +983,6 @@ def buscar_permissoes():
             cursor.execute(sql, (cargo,))
             rows = cursor.fetchall()
             
-            # Monta um dicionário com os módulos (ex: {'mod_free': 1, 'mod_cad_func': 0})
             permissoes = {row[0]: row[1] for row in rows}
             
             return jsonify({'sucesso': True, 'permissoes': permissoes})
@@ -881,13 +997,9 @@ def buscar_permissoes():
 @app.route('/api/permissoes/salvar', methods=['POST'])
 @requer_permissao('mod_cad_perm')
 def salvar_permissoes():
-    """
-    Rota API que recebe um JSON com o cargo e a matriz de permissões 
-    para gravar na tabela permissoes_cargo (via UPDATE ou INSERT).
-    """
     dados = request.get_json()
     cargo = dados.get('cargo')
-    permissoes = dados.get('permissoes') # Dicionário de módulos e valores (1 ou 0)
+    permissoes = dados.get('permissoes')
     
     if not cargo or not permissoes:
         return jsonify({'sucesso': False, 'msg': 'Dados incompletos.'})
@@ -897,18 +1009,14 @@ def salvar_permissoes():
         try:
             cursor = conn.cursor()
             
-            # Percorre cada permissão enviada da tela
             for modulo, valor in permissoes.items():
-                # Verifica se a regra de permissão para este cargo e módulo já existe
                 cursor.execute("SELECT id FROM permissoes_cargo WHERE cargo = %s AND modulo = %s", (cargo, modulo))
                 registro = cursor.fetchone()
                 
                 if registro:
-                    # Se existe, atualiza o valor
                     sql_update = "UPDATE permissoes_cargo SET pode_acessar = %s WHERE id = %s"
                     cursor.execute(sql_update, (valor, registro[0]))
                 else:
-                    # Se não existe, cria o novo registro
                     sql_insert = "INSERT INTO permissoes_cargo (cargo, modulo, pode_acessar) VALUES (%s, %s, %s)"
                     cursor.execute(sql_insert, (cargo, modulo, valor))
             
