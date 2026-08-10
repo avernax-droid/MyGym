@@ -33,6 +33,10 @@
 # 06/08/26: Criação das rotas para o Cadastro de Professores (/backoffice/professores/novo, /api/valida_professor_funcionario e /backoffice/professores/salvar) com validação de vínculo na tabela funcionários.
 # 07/08/26: Atualização nas queries de Professores para refletir os campos nome_emergencia, telefone_emergencia e remoção do status redundante.
 # 07/08/26: Implementação de upload de certificados no cadastro de professores e gravação do pathway no banco, inclusão da rota para buscar a foto_url do RH.
+# 08/08/26: Refatoração estrutural (Normalização de BD). Rota de Funcionários passa a processar upload de fotos, dados demográficos e endereço.
+# 08/08/26: Rota do Professor otimizada para gravar apenas dados pedagógicos, vinculando-se via 'funcionario_id' ao RH. API AJAX reestruturada.
+# 08/08/26: Remoção de máscaras (hífens) das datas na inserção do funcionário.
+# 08/08/26: Migração para suporte a múltiplos certificados via tabela 'professor_certificados'.
 # ==============================================================================
 
 import os
@@ -474,8 +478,12 @@ def buscar_funcionario():
     if conn:
         try:
             cursor = conn.cursor()
-            # Busca segura focada no CPF
-            sql = "SELECT id, email, telefone, cargo, status, nome_completo FROM funcionarios WHERE cpf = %s LIMIT 1"
+            # Busca ampliada para incluir os novos campos centralizados
+            sql = """
+                SELECT id, email, telefone, cargo, status, nome_completo, sexo, 
+                       data_nascimento, cep, endereco, bairro, cidade, uf, data_inicio, foto_url 
+                FROM funcionarios WHERE cpf = %s LIMIT 1
+            """
             cursor.execute(sql, (cpf,))
             row = cursor.fetchone()
             
@@ -488,7 +496,16 @@ def buscar_funcionario():
                         'telefone': row[2],
                         'cargo': row[3],
                         'status': row[4],
-                        'nome_completo': row[5]
+                        'nome_completo': row[5],
+                        'sexo': row[6],
+                        'data_nascimento': str(row[7]) if row[7] else '',
+                        'cep': row[8],
+                        'endereco': row[9],
+                        'bairro': row[10],
+                        'cidade': row[11],
+                        'uf': row[12],
+                        'data_inicio': str(row[13]) if row[13] else '',
+                        'foto_url': row[14]
                     }
                 })
         except Exception as e:
@@ -512,40 +529,97 @@ def novo_funcionario():
 def salvar_funcionario():
     """
     Rota responsável por receber os dados do formulário, verificar se possui ID 
-    e executar UPDATE ou INSERT no banco de dados, incluindo a coluna CPF.
+    e executar UPDATE ou INSERT no banco de dados, incluindo a coluna CPF e upload da foto.
     """
     funcionario_id = request.form.get('funcionario_id')
     cpf = request.form.get('cpf')
     nome_completo = request.form.get('nome_completo')
+    sexo = request.form.get('sexo')
+    data_nascimento = request.form.get('data_nascimento')
     email = request.form.get('email')
     telefone = request.form.get('telefone')
+    cep = request.form.get('cep')
+    endereco = request.form.get('endereco')
+    bairro = request.form.get('bairro')
+    cidade = request.form.get('cidade')
+    uf = request.form.get('uf')
     cargo = request.form.get('cargo')
+    data_inicio = request.form.get('data_inicio')
     status = request.form.get('status')
+    
+    # Tratamento para datas vazias e remoção da máscara (hífens)
+    if data_nascimento: 
+        data_nascimento = data_nascimento.replace('-', '')
+    else: 
+        data_nascimento = None
+        
+    if data_inicio: 
+        data_inicio = data_inicio.replace('-', '')
+    else: 
+        data_inicio = None
+    
+    # --- UPLOAD DA FOTO DO FUNCIONÁRIO ---
+    foto_arquivo = request.files.get('foto_arquivo')
+    foto_url = None
+    
+    if foto_arquivo and foto_arquivo.filename != '':
+        upload_folder = os.path.join(app.root_path, 'static', 'uploads', 'fotos')
+        os.makedirs(upload_folder, exist_ok=True)
+        
+        extensao = os.path.splitext(foto_arquivo.filename)[1]
+        cpf_limpo = re.sub(r'\D', '', cpf) if cpf else str(int(time.time()))
+        nome_seguro = secure_filename(f"{cpf_limpo}_{int(time.time())}_foto{extensao}")
+        
+        caminho_fisico = os.path.join(upload_folder, nome_seguro)
+        foto_arquivo.save(caminho_fisico)
+        
+        foto_url = f"/static/uploads/fotos/{nome_seguro}"
+    # -------------------------------------
     
     conn = get_connection()
     if conn:
         try:
             cursor = conn.cursor()
             
-            if funcionario_id: # Se houver ID, executa UPDATE
-                sql = """
-                    UPDATE funcionarios 
-                    SET cpf=%s, nome_completo=%s, email=%s, telefone=%s, cargo=%s, status=%s 
-                    WHERE id=%s
-                """
-                valores = (cpf, nome_completo, email, telefone, cargo, status, funcionario_id)
+            if funcionario_id: # UPDATE
+                if foto_url:
+                    sql = """
+                        UPDATE funcionarios 
+                        SET cpf=%s, nome_completo=%s, sexo=%s, data_nascimento=%s, email=%s, 
+                            telefone=%s, cep=%s, endereco=%s, bairro=%s, cidade=%s, uf=%s, 
+                            cargo=%s, data_inicio=%s, status=%s, foto_url=%s
+                        WHERE id=%s
+                    """
+                    valores = (cpf, nome_completo, sexo, data_nascimento, email, telefone, cep, 
+                               endereco, bairro, cidade, uf, cargo, data_inicio, status, foto_url, funcionario_id)
+                else:
+                    sql = """
+                        UPDATE funcionarios 
+                        SET cpf=%s, nome_completo=%s, sexo=%s, data_nascimento=%s, email=%s, 
+                            telefone=%s, cep=%s, endereco=%s, bairro=%s, cidade=%s, uf=%s, 
+                            cargo=%s, data_inicio=%s, status=%s
+                        WHERE id=%s
+                    """
+                    valores = (cpf, nome_completo, sexo, data_nascimento, email, telefone, cep, 
+                               endereco, bairro, cidade, uf, cargo, data_inicio, status, funcionario_id)
+                
                 cursor.execute(sql, valores)
                 conn.commit()
                 print(f"Funcionário {nome_completo} atualizado com sucesso!")
-            else: # Se não houver ID, executa INSERT
+                
+            else: # INSERT
                 sql = """
-                    INSERT INTO funcionarios (cpf, nome_completo, email, telefone, cargo, status)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    INSERT INTO funcionarios (cpf, nome_completo, sexo, data_nascimento, email, 
+                                             telefone, cep, endereco, bairro, cidade, uf, 
+                                             cargo, data_inicio, status, foto_url)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
-                valores = (cpf, nome_completo, email, telefone, cargo, status)
+                valores = (cpf, nome_completo, sexo, data_nascimento, email, telefone, cep, 
+                           endereco, bairro, cidade, uf, cargo, data_inicio, status, foto_url)
                 cursor.execute(sql, valores)
                 conn.commit()
                 print(f"Funcionário {nome_completo} salvo com sucesso!")
+                
         except Exception as e:
             print(f"Erro ao salvar o funcionário no banco: {e}")
         finally:
@@ -571,7 +645,7 @@ def valida_professor_funcionario():
     """
     Rota API que valida se um CPF pertence a um funcionário.
     Se sim, verifica se já é um professor cadastrado e retorna os dados
-    para popular o formulário de cadastro ou edição.
+    junto com a lista de certificados cadastrados para popular o formulário.
     """
     cpf = request.args.get('cpf')
     if not cpf:
@@ -582,8 +656,12 @@ def valida_professor_funcionario():
         try:
             cursor = conn.cursor()
             
-            # 1. Verifica na tabela funcionarios (Trazemos o status e foto do RH)
-            sql_func = "SELECT id, nome_completo, email, telefone, status, usuario_id, foto_url FROM funcionarios WHERE cpf = %s LIMIT 1"
+            # 1. Busca os dados consolidados no RH
+            sql_func = """
+                SELECT id, nome_completo, email, telefone, status, usuario_id, foto_url, 
+                       sexo, data_inicio 
+                FROM funcionarios WHERE cpf = %s LIMIT 1
+            """
             cursor.execute(sql_func, (cpf,))
             func = cursor.fetchone()
             
@@ -595,68 +673,70 @@ def valida_professor_funcionario():
                 })
             
             func_id = func[0]
-            nome_completo = func[1]
-            email = func[2]
-            telefone = func[3]
-            status_rh = func[4]
-            usuario_id = func[5]
-            foto_url = func[6]
-
-            # 2. Verifica se já existe na tabela professores (Adequado para a nova estrutura)
+            
+            # 2. Verifica vínculo na tabela de professores através do ID
             sql_prof = """
-                SELECT id, sexo, data_nascimento, cep, endereco, bairro, cidade, uf, 
-                       whatsapp, nome_emergencia, telefone_emergencia, cref, modalidades, certificacoes, 
-                       data_admissao 
-                FROM professores WHERE cpf = %s LIMIT 1
+                SELECT id, nome_emergencia, telefone_emergencia, cref, modalidades, certificacoes
+                FROM professores WHERE funcionario_id = %s LIMIT 1
             """
-            cursor.execute(sql_prof, (cpf,))
+            cursor.execute(sql_prof, (func_id,))
             prof = cursor.fetchone()
             
             if prof:
-                # Já é professor, retorna os dados para carregar o modo edição
+                prof_id = prof[0]
+                
+                # 3. Busca todos os certificados cadastrados para este professor na tabela filha
+                sql_certs = "SELECT id, arquivo_url, nome_original FROM professor_certificados WHERE professor_id = %s"
+                cursor.execute(sql_certs, (prof_id,))
+                certs_rows = cursor.fetchall()
+                
+                certificados_lista = []
+                for c in certs_rows:
+                    certificados_lista.append({
+                        'id': c[0],
+                        'arquivo_url': c[1],
+                        'nome_original': c[2]
+                    })
+                
                 return jsonify({
                     'sucesso': True,
                     'is_funcionario': True,
                     'is_professor': True,
                     'dados': {
                         'funcionario_id': func_id,
-                        'usuario_id': usuario_id,
-                        'nome_completo': nome_completo,
-                        'email': email,
-                        'telefone': telefone,
-                        'status': status_rh, # Herdado sempre do RH
-                        'foto_url': foto_url, # Herdado sempre do RH
-                        'professor_id': prof[0],
-                        'sexo': prof[1],
-                        'data_nascimento': prof[2] if prof[2] else '',
-                        'cep': prof[3],
-                        'endereco': prof[4],
-                        'bairro': prof[5],
-                        'cidade': prof[6],
-                        'uf': prof[7],
-                        'whatsapp': prof[8],
-                        'nome_emergencia': prof[9],
-                        'telefone_emergencia': prof[10],
-                        'cref': prof[11],
-                        'modalidades': prof[12],
-                        'certificacoes': prof[13],
-                        'data_admissao': prof[14] if prof[14] else ''
+                        'usuario_id': func[5],
+                        'nome_completo': func[1],
+                        'email': func[2],
+                        'telefone': func[3],
+                        'status': func[4], 
+                        'foto_url': func[6], 
+                        'sexo': func[7],
+                        'data_inicio': str(func[8]) if func[8] else '',
+                        
+                        'professor_id': prof_id,
+                        'nome_emergencia': prof[1],
+                        'telefone_emergencia': prof[2],
+                        'cref': prof[3],
+                        'modalidades': prof[4],
+                        'certificacoes': prof[5],
+                        'certificados': certificados_lista
                     }
                 })
             else:
-                # É funcionário, mas não é professor ainda (Cadastro Novo)
                 return jsonify({
                     'sucesso': True,
                     'is_funcionario': True,
                     'is_professor': False,
                     'dados': {
                         'funcionario_id': func_id,
-                        'usuario_id': usuario_id,
-                        'nome_completo': nome_completo,
-                        'email': email,
-                        'whatsapp': telefone, # Pré-preenche o whatsapp baseando-se no telefone do RH
-                        'status': status_rh,
-                        'foto_url': foto_url # Herdado sempre do RH
+                        'usuario_id': func[5],
+                        'nome_completo': func[1],
+                        'email': func[2],
+                        'telefone': func[3], 
+                        'status': func[4],
+                        'foto_url': func[6],
+                        'sexo': func[7],
+                        'data_inicio': str(func[8]) if func[8] else ''
                     }
                 })
                 
@@ -672,102 +752,80 @@ def valida_professor_funcionario():
 @requer_permissao('mod_cad_prof')
 def salvar_professor():
     """
-    Rota responsável por receber os dados do formulário e gravar na tabela professores.
-    Realiza INSERT ou UPDATE com base na existência do professor_id.
+    Rota responsável por receber os dados do formulário e gravar na tabela professores
+    e múltiplos certificados na tabela professor_certificados.
     """
     professor_id = request.form.get('professor_id')
-    usuario_id = request.form.get('usuario_id') 
-    cpf = request.form.get('cpf')
-    nome_completo = request.form.get('nome_completo')
-    sexo = request.form.get('sexo')
-    data_nascimento = request.form.get('data_nascimento')
-    cep = request.form.get('cep')
-    endereco = request.form.get('endereco')
-    bairro = request.form.get('bairro')
-    cidade = request.form.get('cidade')
-    uf = request.form.get('uf')
-    whatsapp = request.form.get('whatsapp')
-    email = request.form.get('email')
+    cpf = request.form.get('cpf') # Usado apenas para descobrir o ID raiz
     nome_emergencia = request.form.get('nome_emergencia')
     telefone_emergencia = request.form.get('telefone_emergencia')
     cref = request.form.get('cref')
     modalidades = request.form.get('modalidades')
     certificacoes = request.form.get('certificacoes')
-    data_admissao = request.form.get('data_admissao')
     
-    # Tratamento para datas vazias (para evitar erros de formatação no MySQL)
-    if not data_nascimento: 
-        data_nascimento = None
-    if not data_admissao: 
-        data_admissao = None
-        
-    # Se o funcionário ainda não tem usuário gerado no sistema, o usuario_id será vazio
-    if not usuario_id or usuario_id == 'None':
-        usuario_id = None
-        
-    # --- LÓGICA DE UPLOAD DO CERTIFICADO ---
-    certificado_arquivo = request.files.get('certificado_arquivo')
-    certificado_arquivo_url = None
-    
-    if certificado_arquivo and certificado_arquivo.filename != '':
-        # Cria a pasta caso não exista
-        upload_folder = os.path.join(app.root_path, 'static', 'uploads', 'certificados')
-        os.makedirs(upload_folder, exist_ok=True)
-        
-        # Gera um nome seguro para o arquivo evitando conflitos
-        extensao = os.path.splitext(certificado_arquivo.filename)[1]
-        cpf_limpo = re.sub(r'\D', '', cpf) if cpf else str(int(time.time()))
-        nome_seguro = secure_filename(f"{cpf_limpo}_{int(time.time())}_certificado{extensao}")
-        
-        caminho_fisico = os.path.join(upload_folder, nome_seguro)
-        certificado_arquivo.save(caminho_fisico)
-        
-        certificado_arquivo_url = f"/static/uploads/certificados/{nome_seguro}"
-    # ---------------------------------------
-        
     conn = get_connection()
     if conn:
         try:
             cursor = conn.cursor()
             
+            # Descobre o funcionario_id e usuario_id atualizados baseados no CPF
+            cursor.execute("SELECT id, usuario_id FROM funcionarios WHERE cpf = %s LIMIT 1", (cpf,))
+            func_data = cursor.fetchone()
+            if not func_data:
+                print("Erro: Tentativa de salvar professor com CPF inexistente no RH.")
+                return redirect(url_for('novo_professor'))
+                
+            funcionario_id = func_data[0]
+            usuario_id = func_data[1]
+            
             if professor_id: 
-                # UPDATE (Atualizado para a nova estrutura de dados com verificação do arquivo)
-                if certificado_arquivo_url:
-                    sql = """
-                        UPDATE professores 
-                        SET nome_completo=%s, sexo=%s, data_nascimento=%s, cep=%s, endereco=%s, 
-                            bairro=%s, cidade=%s, uf=%s, whatsapp=%s, email=%s, nome_emergencia=%s, telefone_emergencia=%s, 
-                            cref=%s, modalidades=%s, certificacoes=%s, data_admissao=%s, certificado_arquivo_url=%s
-                        WHERE id=%s
-                    """
-                    valores = (nome_completo, sexo, data_nascimento, cep, endereco, bairro, cidade, uf, 
-                               whatsapp, email, nome_emergencia, telefone_emergencia, cref, modalidades, certificacoes, 
-                               data_admissao, certificado_arquivo_url, professor_id)
-                else:
-                    sql = """
-                        UPDATE professores 
-                        SET nome_completo=%s, sexo=%s, data_nascimento=%s, cep=%s, endereco=%s, 
-                            bairro=%s, cidade=%s, uf=%s, whatsapp=%s, email=%s, nome_emergencia=%s, telefone_emergencia=%s, 
-                            cref=%s, modalidades=%s, certificacoes=%s, data_admissao=%s
-                        WHERE id=%s
-                    """
-                    valores = (nome_completo, sexo, data_nascimento, cep, endereco, bairro, cidade, uf, 
-                               whatsapp, email, nome_emergencia, telefone_emergencia, cref, modalidades, certificacoes, 
-                               data_admissao, professor_id)
-                cursor.execute(sql, valores)
-                print(f"Professor {nome_completo} atualizado com sucesso!")
-            else: 
-                # INSERT (Atualizado para a nova estrutura de dados e incluso a coluna do certificado)
+                # UPDATE focado apenas em dados pedagógicos
                 sql = """
-                    INSERT INTO professores (usuario_id, nome_completo, sexo, data_nascimento, cpf, cep, endereco, 
-                                            bairro, cidade, uf, whatsapp, email, nome_emergencia, telefone_emergencia, cref, 
-                                            modalidades, certificacoes, data_admissao, certificado_arquivo_url)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    UPDATE professores 
+                    SET nome_emergencia=%s, telefone_emergencia=%s, cref=%s, 
+                        modalidades=%s, certificacoes=%s
+                    WHERE id=%s
                 """
-                valores = (usuario_id, nome_completo, sexo, data_nascimento, cpf, cep, endereco, bairro, cidade, uf, 
-                           whatsapp, email, nome_emergencia, telefone_emergencia, cref, modalidades, certificacoes, data_admissao, certificado_arquivo_url)
+                valores = (nome_emergencia, telefone_emergencia, cref, modalidades, certificacoes, professor_id)
                 cursor.execute(sql, valores)
-                print(f"Professor {nome_completo} cadastrado com sucesso!")
+                print("Dados pedagógicos atualizados com sucesso!")
+                
+            else: 
+                # INSERT amarrado pelo funcionario_id
+                sql = """
+                    INSERT INTO professores (funcionario_id, usuario_id, nome_emergencia, telefone_emergencia, 
+                                            cref, modalidades, certificacoes)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """
+                valores = (funcionario_id, usuario_id, nome_emergencia, telefone_emergencia, 
+                           cref, modalidades, certificacoes)
+                cursor.execute(sql, valores)
+                professor_id = cursor.lastrowid
+                print("Professor vinculado e cadastrado com sucesso!")
+            
+            # --- LÓGICA DE UPLOAD DE MÚLTIPLOS CERTIFICADOS ---
+            arquivos_certificados = request.files.getlist('certificado_arquivo')
+            if arquivos_certificados:
+                upload_folder = os.path.join(app.root_path, 'static', 'uploads', 'certificados')
+                os.makedirs(upload_folder, exist_ok=True)
+                
+                for cert_arq in arquivos_certificados:
+                    if cert_arq and cert_arq.filename != '':
+                        extensao = os.path.splitext(cert_arq.filename)[1]
+                        cpf_limpo = re.sub(r'\D', '', cpf) if cpf else str(int(time.time()))
+                        nome_seguro = secure_filename(f"{cpf_limpo}_{int(time.time())}_{random.randint(100,999)}_certificado{extensao}")
+                        
+                        caminho_fisico = os.path.join(upload_folder, nome_seguro)
+                        cert_arq.save(caminho_fisico)
+                        
+                        certificado_arquivo_url = f"/static/uploads/certificados/{nome_seguro}"
+                        
+                        sql_cert = """
+                            INSERT INTO professor_certificados (professor_id, arquivo_url, nome_original)
+                            VALUES (%s, %s, %s)
+                        """
+                        cursor.execute(sql_cert, (professor_id, certificado_arquivo_url, cert_arq.filename))
+            # -------------------------------------------------
                 
             conn.commit()
         except Exception as e:

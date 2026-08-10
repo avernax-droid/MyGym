@@ -20,6 +20,7 @@
  05/08/26: Inclusão do campo CPF, máscara de formatação e validação algorítmica para liberação do cadastro.
  05/08/26: Refatoração do script para remover redundância, passando a consumir as validações globais do arquivo static/validacoes.js.
  05/08/26: Atualização do gatilho AJAX para buscar o cadastro pelo CPF ao invés do nome.
+ 08/08/26: Reestruturação completa do formulário: ampliação da tela, inclusão de upload de foto, adição dos dados demográficos (sexo, data_nascimento), adição da data de início e estrutura completa de endereço integrado ao ViaCEP.
 ============================================================================== #}
 
 {% extends "base.html" %}
@@ -34,11 +35,13 @@
         padding: 2.5rem 3rem;
         border-radius: 8px;
         width: 100%;
-        max-width: 650px;
+        max-width: 800px; /* Ampliado para o padrão do projeto */
         box-shadow: 0px 15px 35px rgba(0, 0, 0, 0.5);
         color: #FFFFFF;
         box-sizing: border-box;
         position: relative;
+        max-height: 90vh; /* Controle de rolagem vertical */
+        overflow-y: auto;
     }
 
     .btn-fechar-form {
@@ -58,8 +61,8 @@
     }
 
     .header-pagina {
-        text-align: center;
-        margin-bottom: 2rem;
+        text-align: left; /* Alinhado à esquerda */
+        margin-bottom: 1.5rem;
     }
 
     .header-pagina h1 {
@@ -74,21 +77,19 @@
     .form-linha {
         display: flex;
         gap: 1.5rem;
-        margin-bottom: 1.2rem;
+        margin-bottom: 1rem; /* Compactado igual ao professor */
     }
 
     .form-grupo {
-        margin-bottom: 1.2rem;
+        margin-bottom: 1rem;
         text-align: left;
         width: 100%;
     }
 
     .form-metade { flex: 1; }
+    .form-terco { flex: 0.5; }
+    .form-largo { flex: 2; }
     .form-email-largo { flex: 1.5; }
-    
-    /* Proporções para a linha Nome/CPF */
-    .form-nome { flex: 2; }
-    .form-cpf { flex: 1; }
 
     .form-grupo label {
         display: block;
@@ -139,15 +140,24 @@
         margin-top: 0.3rem;
     }
 
+    .divisor-secao {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        margin: 1.5rem 0 1rem 0;
+        padding-bottom: 0.5rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.9);
+    }
+
     .form-acoes {
         display: flex;
+        justify-content: space-between; /* Padronizado extremos */
         gap: 1rem;
         margin-top: 2rem;
     }
 
     .btn-custom {
-        flex: 1;
-        padding: 0.9rem;
+        padding: 0.9rem 2.5rem;
         border-radius: 6px;
         font-family: var(--fonte-principal);
         font-size: 1rem;
@@ -193,40 +203,82 @@
 <div class="container-cadastro">
     <a href="/" class="btn-fechar-form" title="Fechar">&times;</a>
 
-    <header class="header-pagina">
-        <h1>Cadastro de Funcionário</h1>
-    </header>
-
-    <form id="formFuncionario" action="/backoffice/funcionarios/salvar" method="POST">
+    <form id="formFuncionario" action="/backoffice/funcionarios/salvar" method="POST" enctype="multipart/form-data">
         
         <input type="hidden" id="funcionario_id" name="funcionario_id" value="">
 
+        <!-- Topo Reestruturado: Título + CPF à esquerda e Foto à direita -->
+        <div class="form-linha" style="margin-bottom: 0.5rem; justify-content: space-between; align-items: flex-start;">
+            
+            <!-- Coluna Esquerda -->
+            <div style="display: flex; flex-direction: column;">
+                <header class="header-pagina">
+                    <h1>Cadastro de Funcionário</h1>
+                </header>
+
+                <div class="form-grupo" style="flex: unset; width: auto; margin-bottom: 0;">
+                    <label for="cpf">CPF *</label>
+                    <input type="text" id="cpf" name="cpf" required 
+                           placeholder="000.000.000-00" maxlength="14" class="input-limpo campo-validavel" style="max-width: 160px;">
+                    <span class="msg-erro" id-erro="cpf">CPF inválido.</span>
+                </div>
+            </div>
+            
+            <!-- Coluna Direita: Quadro de Upload da Foto -->
+            <div class="foto-container" style="display: flex; align-items: center; justify-content: center; width: 130px; height: 130px; border-radius: 8px; border: 1px dashed rgba(255,255,255,0.4); background-color: rgba(255,255,255,0.05); overflow: hidden; position: relative; margin-top: 0.5rem; transition: border-color 0.3s ease;">
+                <!-- Label cobre todo o quadro para habilitar o click -->
+                <label for="foto_arquivo" style="cursor: pointer; display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; position: absolute; z-index: 3;" title="Clique para enviar a foto do funcionário">
+                    <!-- Ícone SVG de Placeholder -->
+                    <svg id="foto_placeholder" xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                </label>
+                <!-- Imagem Real ou Preview (inicia invisível) -->
+                <img id="foto_funcionario" src="" alt="Foto" style="width: 100%; height: 100%; object-fit: cover; display: none; position: relative; z-index: 2;">
+                <!-- Input Oculto de Arquivo -->
+                <input type="file" id="foto_arquivo" name="foto_arquivo" accept=".jpg, .jpeg, .png" style="display: none;">
+            </div>
+        </div>
+
+        <div class="divisor-secao" style="margin-top: 1rem;">Dados Pessoais</div>
+
         <div class="form-linha">
-            <div class="form-grupo form-nome">
-                <label for="nome_completo">Nome Completo</label>
+            <div class="form-grupo form-largo">
+                <label for="nome_completo">Nome Completo *</label>
                 <input type="text" id="nome_completo" name="nome_completo" required 
                        placeholder="Ex: João da Silva" class="input-limpo campo-validavel">
                 <span class="msg-erro" id-erro="nome_completo">Preencha o Nome Completo.</span>
             </div>
 
-            <div class="form-grupo form-cpf">
-                <label for="cpf">CPF</label>
-                <input type="text" id="cpf" name="cpf" required 
-                       placeholder="000.000.000-00" maxlength="14" class="input-limpo campo-validavel">
-                <span class="msg-erro" id-erro="cpf">CPF inválido.</span>
+            <div class="form-grupo form-metade">
+                <label for="sexo">Sexo</label>
+                <select id="sexo" name="sexo" class="input-limpo">
+                    <option value="" disabled selected>Selecione...</option>
+                    <option value="M">Masculino</option>
+                    <option value="F">Feminino</option>
+                    <option value="Outro">Outro</option>
+                </select>
+            </div>
+
+            <div class="form-grupo form-metade">
+                <label for="data_nascimento">Data de Nascimento</label>
+                <input type="date" id="data_nascimento" name="data_nascimento" class="input-limpo">
             </div>
         </div>
 
+        <div class="divisor-secao">Contatos e Endereço</div>
+
         <div class="form-linha">
             <div class="form-grupo form-email-largo">
-                <label for="email">E-mail</label>
+                <label for="email">E-mail *</label>
                 <input type="email" id="email" name="email" required 
                        placeholder="joao@mygym.com" class="input-limpo campo-validavel">
                 <span class="msg-erro" id-erro="email">E-mail inválido ou incompleto.</span>
             </div>
 
             <div class="form-grupo form-metade">
-                <label for="telefone">Telefone (WhatsApp)</label>
+                <label for="telefone">Telefone (WhatsApp) *</label>
                 <input type="text" id="telefone" name="telefone" required 
                        placeholder="(11) 99999-9999" maxlength="15" class="input-limpo campo-validavel">
                 <span class="msg-erro" id-erro="telefone">Preencha o Telefone/WhatsApp corretamente.</span>
@@ -234,8 +286,36 @@
         </div>
 
         <div class="form-linha">
+            <div class="form-grupo form-terco">
+                <label for="cep">CEP</label>
+                <input type="text" id="cep" name="cep" class="input-limpo" placeholder="00000-000" maxlength="9">
+            </div>
+            <div class="form-grupo form-largo">
+                <label for="endereco">Endereço (Rua, Número, Complemento)</label>
+                <input type="text" id="endereco" name="endereco" class="input-limpo">
+            </div>
+        </div>
+
+        <div class="form-linha">
+            <div class="form-grupo form-largo">
+                <label for="bairro">Bairro</label>
+                <input type="text" id="bairro" name="bairro" class="input-limpo">
+            </div>
             <div class="form-grupo form-metade">
-                <label for="cargo">Cargo</label>
+                <label for="cidade">Cidade</label>
+                <input type="text" id="cidade" name="cidade" class="input-limpo">
+            </div>
+            <div class="form-grupo form-terco">
+                <label for="uf">UF</label>
+                <input type="text" id="uf" name="uf" class="input-limpo" maxlength="2" placeholder="Ex: SP">
+            </div>
+        </div>
+
+        <div class="divisor-secao">Dados Profissionais</div>
+
+        <div class="form-linha">
+            <div class="form-grupo form-metade">
+                <label for="cargo">Cargo *</label>
                 <select id="cargo" name="cargo" required class="input-limpo campo-validavel">
                     <option value="" disabled selected>Selecione o cargo...</option>
                     <option value="gerente">Gerente</option>
@@ -243,8 +323,13 @@
                     <option value="professor">Professor</option>
                     <option value="recepcionista">Recepcionista</option>
                 </select>
-                <small class="texto-apoio">As permissões de acesso serão baseadas neste cargo.</small>
+                <small class="texto-apoio">Define as permissões de acesso ao sistema.</small>
                 <span class="msg-erro" id-erro="cargo">Selecione um Cargo.</span>
+            </div>
+
+            <div class="form-grupo form-metade">
+                <label for="data_inicio">Data de Início</label>
+                <input type="date" id="data_inicio" name="data_inicio" class="input-limpo">
             </div>
 
             <div class="form-grupo form-metade">
@@ -257,8 +342,8 @@
         </div>
 
         <div class="form-acoes">
-            <button type="submit" id="btnSalvar" class="btn-custom btn-salvar" disabled>Salvar</button>
             <a href="/" class="btn-custom btn-cancelar">Cancelar</a>
+            <button type="submit" id="btnSalvar" class="btn-custom btn-salvar" disabled>Salvar</button>
         </div>
     </form>
 </div>
@@ -268,31 +353,43 @@
         const form = document.getElementById("formFuncionario");
         const inputsValidaveis = form.querySelectorAll(".campo-validavel");
         const btnSalvar = document.getElementById("btnSalvar");
-        const inputTelefone = document.getElementById("telefone");
+        
         const inputCpf = document.getElementById("cpf");
-        const inputEmail = document.getElementById("email");
         const inputNomeCompleto = document.getElementById("nome_completo");
+        const inputEmail = document.getElementById("email");
+        const inputTelefone = document.getElementById("telefone");
+        const inputCep = document.getElementById("cep");
+        
         const selectCargo = document.getElementById("cargo");
         const selectStatus = document.getElementById("status");
         const inputFuncionarioId = document.getElementById("funcionario_id");
 
-        // Aplica máscaras se já vierem preenchidos (Funções globais de validacoes.js)
+        // Elementos da Foto
+        const inputFileFoto = document.getElementById("foto_arquivo");
+        const imgFoto = document.getElementById("foto_funcionario");
+        const fotoPlaceholder = document.getElementById("foto_placeholder");
+        const fotoContainer = document.querySelector(".foto-container");
+
+        // Aplica máscaras caso haja algum preenchimento automático
         if (inputTelefone.value) aplicarMascaraTelefone(inputTelefone);
         if (inputCpf.value) aplicarMascaraCPF(inputCpf);
 
         // --- NAVEGAÇÃO POR ENTER ---
-        const elementosNavegacao = [
-            inputNomeCompleto, 
-            inputCpf,
-            inputEmail, 
-            inputTelefone, 
-            selectCargo
-        ];
+        // Ampliado para capturar os novos inputs da tela
+        const elementosNavegacao = Array.from(form.querySelectorAll(
+            'input:not([type="hidden"]):not([type="file"]):not([disabled]):not([readonly]), select:not([disabled]):not([readonly])'
+        ));
 
         elementosNavegacao.forEach((elemento, index) => {
             elemento.addEventListener("keydown", function(e) {
                 if (e.key === "Enter") {
                     e.preventDefault();
+                    
+                    if (elemento.id === 'cpf') {
+                        elemento.blur();
+                        return;
+                    }
+
                     const proximo = elementosNavegacao[index + 1];
                     if (proximo) {
                         proximo.focus();
@@ -300,6 +397,32 @@
                         btnSalvar.focus();
                     }
                 }
+            });
+        });
+
+        // --- PREVIEW INSTANTÂNEO DA FOTO ---
+        inputFileFoto.addEventListener("change", function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    imgFoto.src = evt.target.result;
+                    imgFoto.style.display = "block";
+                    fotoPlaceholder.style.display = "none";
+                    fotoContainer.style.borderColor = "#80D5C9"; // Destaque visual
+                }
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // --- EVENTOS CEP VIA API ---
+        inputCep.addEventListener("input", (e) => aplicarMascaraCEP(e.target));
+        inputCep.addEventListener("blur", function(e) {
+            buscarEnderecoViaCEP(e.target.value, {
+                endereco: 'endereco',
+                bairro: 'bairro',
+                cidade: 'cidade',
+                uf: 'uf'
             });
         });
 
@@ -321,19 +444,22 @@
             if (valor.length > 11) valor = valor.slice(0, 11);
             e.target.value = valor;
             validarFormulario();
+            
+            // Reseta a imagem visualmente se o usuário alterar o CPF
+            imgFoto.style.display = 'none';
+            fotoPlaceholder.style.display = 'block';
+            fotoContainer.style.borderColor = "rgba(255,255,255,0.4)";
         });
 
         inputCpf.addEventListener("blur", function(e) {
             aplicarMascaraCPF(e.target);
 
             const cpfDigitado = this.value;
-            // Se o CPF for inválido matematicamente, interrompe a busca
             if (!validarCPF(cpfDigitado)) {
                 inputFuncionarioId.value = ""; 
                 return;
             }
 
-            // Remove a máscara antes de enviar para a API (compara apenas os dígitos)
             const cpfLimpo = cpfDigitado.replace(/\D/g, "");
 
             fetch(`/api/funcionarios/buscar?cpf=${encodeURIComponent(cpfLimpo)}`)
@@ -345,18 +471,36 @@
                         inputEmail.value = data.dados.email || "";
                         inputTelefone.value = data.dados.telefone || "";
                         
-                        if (data.dados.cargo) {
-                            selectCargo.value = data.dados.cargo;
-                        }
+                        // Novos campos estruturais transferidos do professor
+                        document.getElementById("sexo").value = data.dados.sexo || "";
+                        document.getElementById("data_nascimento").value = data.dados.data_nascimento || "";
+                        document.getElementById("cep").value = data.dados.cep || "";
+                        if (data.dados.cep) aplicarMascaraCEP(document.getElementById("cep"));
                         
-                        if (data.dados.status) {
-                            selectStatus.value = data.dados.status;
+                        document.getElementById("endereco").value = data.dados.endereco || "";
+                        document.getElementById("bairro").value = data.dados.bairro || "";
+                        document.getElementById("cidade").value = data.dados.cidade || "";
+                        document.getElementById("uf").value = data.dados.uf || "";
+                        document.getElementById("data_inicio").value = data.dados.data_inicio || "";
+
+                        if (data.dados.cargo) selectCargo.value = data.dados.cargo;
+                        if (data.dados.status) selectStatus.value = data.dados.status;
+
+                        // Renderização da Foto já salva
+                        if (data.dados.foto_url) {
+                            imgFoto.src = data.dados.foto_url;
+                            imgFoto.style.display = "block";
+                            fotoPlaceholder.style.display = "none";
+                            fotoContainer.style.borderColor = "rgba(255,255,255,0.1)";
+                        } else {
+                            imgFoto.src = "";
+                            imgFoto.style.display = "none";
+                            fotoPlaceholder.style.display = "block";
                         }
 
                         aplicarMascaraTelefone(inputTelefone);
                         validarFormulario();
                     } else {
-                        // Limpa o ID se for um novo cadastro para garantir que o insert ocorra
                         inputFuncionarioId.value = "";
                     }
                 })
@@ -423,9 +567,9 @@
             if (!valido) {
                 e.preventDefault();
             } else {
-                // Remove as formatações antes de salvar no Banco de Dados
                 removerMascara(inputTelefone);
                 removerMascara(inputCpf);
+                if (inputCep.value) inputCep.value = inputCep.value.replace(/\D/g, "");
             }
         });
     });

@@ -19,3 +19,6 @@ __pycache__/
 DOC/
 TOOLS/
 *.txt
+
+# Uploads de Arquivos (Testes Locais)
+static/uploads/
