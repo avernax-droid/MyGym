@@ -8,8 +8,15 @@
 
  HISTÓRICO DE ALTERAÇÕES:
  10/08/26: Criação inicial do template com navegação por abas.
- 10/08/26: Expansão do container para 950px e reestruturação da aba Responsável 
-           (Linha 1: Nome; Linha 2: CPF, Telefone, CEP; Linha 3: Endereço e Bairro proporcionais).
+ 10/08/26: Expansão do container para 950px e reestruturação da aba Responsável.
+ 12/08/26: Implementação do seletor de modo (Consulta vs Cadastro) e reestruturação 
+           da exibição da busca inteligente e abas de formulário.
+ 12/08/26: Consumo de funções globais de UI/UX (Enter como Tab, Preview de Foto) 
+           e ajuste nos gatilhos de validação para disparar apenas no blur.
+ 12/08/26: Ajuste na visibilidade do calendário (date), máscara de telefones via oninput, 
+           e validação obrigatória multicampos com alerta visual em abas.
+ 12/08/26: Inclusão do painel de exibição visual do Número da Matrícula.
+ 12/08/26: Formatação e alteração visual da barra de consulta após busca bem-sucedida.
 ============================================================================== #}
 
 {% extends "base.html" %}
@@ -24,7 +31,7 @@
         padding: 2rem 2.5rem;
         border-radius: 8px;
         width: 100%;
-        max-width: 950px; /* Largura expandida para melhor distribuição */
+        max-width: 950px;
         box-shadow: 0px 15px 35px rgba(0, 0, 0, 0.5);
         color: #FFFFFF;
         box-sizing: border-box;
@@ -60,6 +67,26 @@
         margin: 0;
         letter-spacing: 1px;
         color: #FFFFFF;
+    }
+
+    .opcao-modo {
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        color: #FFFFFF;
+        font-size: 1.05rem;
+        opacity: 0.7;
+        transition: opacity 0.3s ease;
+    }
+
+    .opcao-modo:hover {
+        opacity: 1;
+    }
+
+    .opcao-modo input[type="radio"] {
+        accent-color: #80D5C9;
+        transform: scale(1.2);
     }
 
     .barra-busca-smart {
@@ -101,6 +128,15 @@
     .aba-btn.ativa {
         color: #80D5C9;
         border-bottom-color: #80D5C9;
+    }
+
+    /* Estilo para as notificações visuais de pendência nas abas */
+    .alerta-aba {
+        color: #ff6b6b;
+        font-size: 0.65rem;
+        margin-left: 0.3rem;
+        display: none;
+        vertical-align: super;
     }
 
     .aba-conteudo {
@@ -145,6 +181,15 @@
         font-size: 0.95rem;
         box-sizing: border-box;
         transition: all 0.3s ease;
+    }
+
+    /* Solução para exibição do ícone de calendário no Dark Mode */
+    input[type="date"]::-webkit-calendar-picker-indicator {
+        filter: invert(1) opacity(0.6);
+        cursor: pointer;
+    }
+    input[type="date"]::-webkit-calendar-picker-indicator:hover {
+        filter: invert(1) opacity(0.9);
     }
 
     .select-limpo option {
@@ -281,202 +326,227 @@
         <h1>Cadastro e Manutenção de Alunos</h1>
     </header>
 
+    <!-- SELETOR DE MODO E EXIBIÇÃO DE MATRÍCULA -->
+    <div class="seletor-modo" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 1rem;">
+        <div style="display: flex; gap: 2rem;">
+            <label class="opcao-modo">
+                <input type="radio" name="modo_tela" value="consulta" onchange="alternarModo()"> <strong>Consulta</strong>
+            </label>
+            <label class="opcao-modo">
+                <input type="radio" name="modo_tela" value="cadastro" onchange="alternarModo()"> <strong>Cadastro</strong>
+            </label>
+        </div>
+        
+        <!-- Bloco dinâmico da Matrícula -->
+        <div id="box-matricula" style="display: none; background: rgba(255,255,255,0.05); border: 1px dashed rgba(128, 213, 201, 0.4); padding: 0.5rem 1rem; border-radius: 6px; color: #80D5C9; font-weight: 600; font-size: 0.95rem;">
+            Matrícula: <span id="display_matricula" style="color: #FFFFFF; font-size: 1.1rem; margin-left: 0.5rem;"></span>
+        </div>
+    </div>
+
     <form id="formAluno" action="/backoffice/alunos/salvar" method="POST" enctype="multipart/form-data">
         
         <input type="hidden" id="aluno_id" name="aluno_id" value="">
         <input type="hidden" id="usuario_id" name="usuario_id" value="">
 
-        <!-- SISTEMA DE ABAS VISUAIS -->
-        <div class="abas-container">
-            <button type="button" class="aba-btn ativa" onclick="mudarAba('dados-pessoais')">
-                Dados Pessoais <span id="alerta_dados" class="alerta-aba"></span>
-            </button>
-            <button type="button" class="aba-btn" onclick="mudarAba('responsavel')">
-                Responsável <span id="alerta_resp" class="alerta-aba"></span>
-            </button>
-            <button type="button" class="aba-btn" onclick="mudarAba('contatos')">
-                Contatos <span id="alerta_contatos" class="alerta-aba"></span>
-            </button>
-            <button type="button" class="aba-btn" onclick="mudarAba('medico')">
-                Ficha Médica <span id="alerta_medico" class="alerta-aba"></span>
-            </button>
+        <!-- ÁREA DE CONSULTA (Oculta por padrão) -->
+        <div id="area-consulta" class="barra-busca-smart" style="display: none;">
+            <div class="form-grupo" style="margin-bottom: 0;">
+                <label id="label_busca_smart" for="busca_smart" style="color: #80D5C9; font-weight: 600;">Informe a matrícula ou o CPF</label>
+                <input type="text" id="busca_smart" class="input-limpo" placeholder="Digite a Matrícula ou CPF..." style="background-color: rgba(0,0,0,0.2);">
+            </div>
+            <div style="align-self: flex-end;">
+                <button type="button" id="btnExecutarBusca" class="btn-custom btn-salvar" style="padding: 0.8rem 1.5rem; font-size: 0.85rem;">Buscar</button>
+            </div>
         </div>
 
-        <!-- ========================================== -->
-        <!-- ABA 1: DADOS PESSOAIS -->
-        <!-- ========================================== -->
-        <div id="aba-dados-pessoais" class="aba-conteudo ativa">
+        <!-- ÁREA DO FORMULÁRIO (Oculta por padrão) -->
+        <div id="area-formulario" style="display: none;">
             
-            <div class="barra-busca-smart">
-                <div class="form-grupo" style="margin-bottom: 0;">
-                    <label for="busca_smart" style="color: #80D5C9; font-weight: 600;">Consulta Rápida</label>
-                    <input type="text" id="busca_smart" class="input-limpo" placeholder="Digite a Matrícula ou CPF do Responsável..." style="background-color: rgba(0,0,0,0.2);">
-                </div>
-                <div style="align-self: flex-end;">
-                    <button type="button" id="btnExecutarBusca" class="btn-custom btn-salvar" style="padding: 0.8rem 1.5rem; font-size: 0.85rem;">Buscar</button>
-                </div>
+            <!-- SISTEMA DE ABAS VISUAIS -->
+            <div class="abas-container">
+                <button type="button" class="aba-btn ativa" onclick="mudarAba('dados-pessoais')">
+                    Dados Pessoais <span id="alerta_dados" class="alerta-aba" title="Pendências nesta aba">🔴</span>
+                </button>
+                <button type="button" class="aba-btn" onclick="mudarAba('responsavel')">
+                    Responsável <span id="alerta_resp" class="alerta-aba" title="Pendências nesta aba">🔴</span>
+                </button>
+                <button type="button" class="aba-btn" onclick="mudarAba('contatos')">
+                    Contatos <span id="alerta_contatos" class="alerta-aba">🔴</span>
+                </button>
+                <button type="button" class="aba-btn" onclick="mudarAba('medico')">
+                    Ficha Médica <span id="alerta_medico" class="alerta-aba" title="Pendências nesta aba">🔴</span>
+                </button>
             </div>
 
-            <div class="form-linha" style="align-items: center;">
-                <div style="flex: 3;">
-                    <div class="form-linha">
-                        <div class="form-grupo form-largo">
-                            <label for="nome_completo">Nome Completo *</label>
-                            <input type="text" id="nome_completo" name="nome_completo" required class="input-limpo campo-validavel">
-                            <span class="msg-erro" id-erro="nome_completo">Preencha o nome completo.</span>
+            <!-- ========================================== -->
+            <!-- ABA 1: DADOS PESSOAIS -->
+            <!-- ========================================== -->
+            <div id="aba-dados-pessoais" class="aba-conteudo ativa">
+
+                <div class="form-linha" style="align-items: center;">
+                    <div style="flex: 3;">
+                        <div class="form-linha">
+                            <div class="form-grupo form-largo">
+                                <label for="nome_completo">Nome Completo *</label>
+                                <input type="text" id="nome_completo" name="nome_completo" required class="input-limpo campo-validavel">
+                                <span class="msg-erro" id-erro="nome_completo">Preencha o nome completo.</span>
+                            </div>
+                        </div>
+
+                        <div class="form-linha">
+                            <div class="form-grupo form-metade">
+                                <label for="data_nascimento">Data de Nascimento *</label>
+                                <input type="date" id="data_nascimento" name="data_nascimento" required class="input-limpo campo-validavel">
+                                <span class="msg-erro" id-erro="data_nascimento">Informe a data de nascimento.</span>
+                            </div>
+
+                            <div class="form-grupo form-metade">
+                                <label for="sexo">Sexo *</label>
+                                <select id="sexo" name="sexo" required class="select-limpo campo-validavel">
+                                    <option value="">Selecione...</option>
+                                    <option value="M">Masculino</option>
+                                    <option value="F">Feminino</option>
+                                    <option value="Outro">Outro</option>
+                                </select>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="form-linha">
-                        <div class="form-grupo form-metade">
-                            <label for="data_nascimento">Data de Nascimento *</label>
-                            <input type="date" id="data_nascimento" name="data_nascimento" required class="input-limpo campo-validavel">
-                            <span class="msg-erro" id-erro="data_nascimento">Informe a data de nascimento.</span>
+                    <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
+                        <label style="font-size: 0.85rem; margin-bottom: 0.4rem; color: rgba(255,255,255,0.8);">Foto</label>
+                        <div class="foto-container" style="display: flex; align-items: center; justify-content: center; width: 110px; height: 110px; border-radius: 8px; border: 1px dashed rgba(255,255,255,0.4); background-color: rgba(255,255,255,0.05); overflow: hidden; position: relative;">
+                            <svg id="foto_placeholder" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute;">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                            <img id="foto_aluno" src="" alt="Foto" style="width: 100%; height: 100%; object-fit: cover; display: none; position: relative; z-index: 2;">
                         </div>
-
-                        <div class="form-grupo form-metade">
-                            <label for="sexo">Sexo *</label>
-                            <select id="sexo" name="sexo" required class="select-limpo campo-validavel">
-                                <option value="">Selecione...</option>
-                                <option value="M">Masculino</option>
-                                <option value="F">Feminino</option>
-                                <option value="Outro">Outro</option>
-                            </select>
-                        </div>
+                        <label for="foto_arquivo" class="btn-custom btn-cancelar" style="font-size: 0.75rem; padding: 0.3rem 0.6rem; margin-top: 0.5rem; cursor: pointer;">Carregar Foto</label>
+                        <input type="file" id="foto_arquivo" name="foto_arquivo" accept=".jpg, .jpeg, .png" style="display: none;">
                     </div>
                 </div>
 
-                <div style="flex: 1; display: flex; flex-direction: column; align-items: center;">
-                    <label style="font-size: 0.85rem; margin-bottom: 0.4rem; color: rgba(255,255,255,0.8);">Foto</label>
-                    <div class="foto-container" style="display: flex; align-items: center; justify-content: center; width: 110px; height: 110px; border-radius: 8px; border: 1px dashed rgba(255,255,255,0.4); background-color: rgba(255,255,255,0.05); overflow: hidden; position: relative;">
-                        <svg id="foto_placeholder" xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute;">
-                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                            <circle cx="12" cy="7" r="4"></circle>
-                        </svg>
-                        <img id="foto_aluno" src="" alt="Foto" style="width: 100%; height: 100%; object-fit: cover; display: none; position: relative; z-index: 2;">
+                <div class="form-linha">
+                    <div class="form-grupo form-metade">
+                        <label for="email">E-mail</label>
+                        <input type="email" id="email" name="email" class="input-limpo" placeholder="aluno@email.com">
                     </div>
-                    <label for="foto_arquivo" class="btn-custom btn-cancelar" style="font-size: 0.75rem; padding: 0.3rem 0.6rem; margin-top: 0.5rem; cursor: pointer;">Carregar Foto</label>
-                    <input type="file" id="foto_arquivo" name="foto_arquivo" accept=".jpg, .jpeg, .png" style="display: none;">
+
+                    <div class="form-grupo form-metade">
+                        <label for="telefone">Telefone / WhatsApp</label>
+                        <input type="text" id="telefone" name="telefone" placeholder="(11) 99999-9999" maxlength="15" class="input-limpo" oninput="aplicarMascaraTelefone(this)">
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ========================================== -->
+            <!-- ABA 2: RESPONSÁVEL (Layout Ajustado) -->
+            <!-- ========================================== -->
+            <div id="aba-responsavel" class="aba-conteudo">
+                <input type="hidden" id="responsavel_id" name="responsavel_id" value="">
+
+                <!-- Linha 1: Nome Completo -->
+                <div class="form-linha">
+                    <div class="form-grupo" style="flex: 1;">
+                        <label for="resp_nome">Nome Completo *</label>
+                        <input type="text" id="resp_nome" name="resp_nome" class="input-limpo campo-validavel" required>
+                        <span class="msg-erro" id-erro="resp_nome">Preencha o nome do responsável.</span>
+                    </div>
+                </div>
+
+                <!-- Linha 2: CPF, Telefone e CEP -->
+                <div class="form-linha">
+                    <div class="form-grupo form-metade">
+                        <label for="resp_cpf">CPF</label>
+                        <input type="text" id="resp_cpf" name="resp_cpf" placeholder="000.000.000-00" maxlength="14" class="input-limpo" oninput="aplicarMascaraCPF(this)">
+                    </div>
+                    <div class="form-grupo form-metade">
+                        <label for="resp_telefone">Telefone *</label>
+                        <input type="text" id="resp_telefone" name="resp_telefone" placeholder="(11) 99999-9999" maxlength="15" class="input-limpo campo-validavel" required oninput="aplicarMascaraTelefone(this)">
+                        <span class="msg-erro" id-erro="resp_telefone">Informe o telefone do responsável.</span>
+                    </div>
+                    <div class="form-grupo form-metade">
+                        <label for="resp_cep">CEP</label>
+                        <input type="text" id="resp_cep" name="resp_cep" placeholder="00000-000" maxlength="9" class="input-limpo" 
+                               oninput="aplicarMascaraCEP(this)" 
+                               onblur="buscarEnderecoViaCEP(this.value, {endereco: 'resp_endereco', bairro: 'resp_bairro', cidade: 'resp_cidade', uf: 'resp_uf'})">
+                    </div>
+                </div>
+
+                <!-- Linha 3: Endereço e Bairro Proporcionais -->
+                <div class="form-linha">
+                    <div class="form-grupo" style="flex: 2.5;">
+                        <label for="resp_endereco">Endereço</label>
+                        <input type="text" id="resp_endereco" name="resp_endereco" class="input-limpo">
+                    </div>
+                    <div class="form-grupo" style="flex: 1.5;">
+                        <label for="resp_bairro">Bairro</label>
+                        <input type="text" id="resp_bairro" name="resp_bairro" class="input-limpo">
+                    </div>
+                </div>
+
+                <!-- Linha 4: Cidade e UF -->
+                <div class="form-linha">
+                    <div class="form-grupo form-largo">
+                        <label for="resp_cidade">Cidade</label>
+                        <input type="text" id="resp_cidade" name="resp_cidade" class="input-limpo">
+                    </div>
+                    <div class="form-grupo form-terco">
+                        <label for="resp_uf">UF</label>
+                        <input type="text" id="resp_uf" name="resp_uf" maxlength="2" class="input-limpo">
+                    </div>
                 </div>
             </div>
 
-            <div class="form-linha">
-                <div class="form-grupo form-metade">
-                    <label for="email">E-mail</label>
-                    <input type="email" id="email" name="email" class="input-limpo" placeholder="aluno@email.com">
+            <!-- ========================================== -->
+            <!-- ABA 3: CONTATOS (Rede de Apoio) -->
+            <!-- ========================================== -->
+            <div id="aba-contatos" class="aba-conteudo">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <p style="font-size: 0.85rem; color: rgba(255,255,255,0.7); margin: 0;">
+                        Adicione pessoas autorizadas a buscar o aluno ou contatos de emergência.
+                    </p>
+                    <button type="button" class="btn-adicionar" onclick="adicionarContatoLinha()">+ Adicionar Contato</button>
                 </div>
 
-                <div class="form-grupo form-metade">
-                    <label for="telefone">Telefone / WhatsApp</label>
-                    <input type="text" id="telefone" name="telefone" placeholder="(11) 99999-9999" maxlength="15" class="input-limpo">
+                <div id="containerContatos">
+                    <!-- Linhas dinâmicas de contatos inseridas via JS -->
                 </div>
             </div>
 
+            <!-- ========================================== -->
+            <!-- ABA 4: FICHA MÉDICA -->
+            <!-- ========================================== -->
+            <div id="aba-medico" class="aba-conteudo">
+                <div class="form-linha">
+                    <div class="form-grupo">
+                        <label for="observacoes_medicas">Observações Médicas / Alergias / Restrições</label>
+                        <textarea id="observacoes_medicas" name="observacoes_medicas" class="input-limpo" rows="3" style="resize: vertical;"></textarea>
+                    </div>
+                </div>
+
+                <div class="form-linha">
+                    <div class="form-grupo form-metade">
+                        <label for="exame_medico_data">Data do Exame Médico (Piscina)</label>
+                        <input type="date" id="exame_medico_data" name="exame_medico_data" class="input-limpo">
+                    </div>
+
+                    <div class="form-grupo form-metade">
+                        <label for="exame_medico_validade">Validade do Exame Médico *</label>
+                        <input type="date" id="exame_medico_validade" name="exame_medico_validade" required class="input-limpo campo-validavel">
+                        <span class="msg-erro" id-erro="exame_medico_validade">Informe a data de validade.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BOTÕES DE AÇÃO GLOBAIS -->
+            <div class="form-acoes">
+                <a href="/" class="btn-custom btn-cancelar">Cancelar</a>
+                <button type="submit" id="btnSalvar" class="btn-custom btn-salvar">Salvar Aluno</button>
+            </div>
+            
         </div>
-
-        <!-- ========================================== -->
-        <!-- ABA 2: RESPONSÁVEL (Layout Ajustado) -->
-        <!-- ========================================== -->
-        <div id="aba-responsavel" class="aba-conteudo">
-            <input type="hidden" id="responsavel_id" name="responsavel_id" value="">
-
-            <!-- Linha 1: Nome Completo -->
-            <div class="form-linha">
-                <div class="form-grupo" style="flex: 1;">
-                    <label for="resp_nome">Nome Completo</label>
-                    <input type="text" id="resp_nome" name="resp_nome" class="input-limpo">
-                </div>
-            </div>
-
-            <!-- Linha 2: CPF, Telefone e CEP -->
-            <div class="form-linha">
-                <div class="form-grupo form-metade">
-                    <label for="resp_cpf">CPF</label>
-                    <input type="text" id="resp_cpf" name="resp_cpf" placeholder="000.000.000-00" maxlength="14" class="input-limpo">
-                </div>
-                <div class="form-grupo form-metade">
-                    <label for="resp_telefone">Telefone</label>
-                    <input type="text" id="resp_telefone" name="resp_telefone" placeholder="(11) 99999-9999" maxlength="15" class="input-limpo">
-                </div>
-                <div class="form-grupo form-metade">
-                    <label for="resp_cep">CEP</label>
-                    <input type="text" id="resp_cep" name="resp_cep" placeholder="00000-000" maxlength="9" class="input-limpo" 
-                           oninput="aplicarMascaraCEP(this)" 
-                           onblur="buscarEnderecoViaCEP(this.value, {endereco: 'resp_endereco', bairro: 'resp_bairro', cidade: 'resp_cidade', uf: 'resp_uf'})">
-                </div>
-            </div>
-
-            <!-- Linha 3: Endereço e Bairro Proporcionais -->
-            <div class="form-linha">
-                <div class="form-grupo" style="flex: 2.5;">
-                    <label for="resp_endereco">Endereço</label>
-                    <input type="text" id="resp_endereco" name="resp_endereco" class="input-limpo">
-                </div>
-                <div class="form-grupo" style="flex: 1.5;">
-                    <label for="resp_bairro">Bairro</label>
-                    <input type="text" id="resp_bairro" name="resp_bairro" class="input-limpo">
-                </div>
-            </div>
-
-            <!-- Linha 4: Cidade e UF -->
-            <div class="form-linha">
-                <div class="form-grupo form-largo">
-                    <label for="resp_cidade">Cidade</label>
-                    <input type="text" id="resp_cidade" name="resp_cidade" class="input-limpo">
-                </div>
-                <div class="form-grupo form-terco">
-                    <label for="resp_uf">UF</label>
-                    <input type="text" id="resp_uf" name="resp_uf" maxlength="2" class="input-limpo">
-                </div>
-            </div>
-        </div>
-
-        <!-- ========================================== -->
-        <!-- ABA 3: CONTATOS (Rede de Apoio) -->
-        <!-- ========================================== -->
-        <div id="aba-contatos" class="aba-conteudo">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                <p style="font-size: 0.85rem; color: rgba(255,255,255,0.7); margin: 0;">
-                    Adicione pessoas autorizadas a buscar o aluno ou contatos de emergência.
-                </p>
-                <button type="button" class="btn-adicionar" onclick="adicionarContatoLinha()">+ Adicionar Contato</button>
-            </div>
-
-            <div id="containerContatos">
-                <!-- Linhas dinâmicas de contatos inseridas via JS -->
-            </div>
-        </div>
-
-        <!-- ========================================== -->
-        <!-- ABA 4: FICHA MÉDICA -->
-        <!-- ========================================== -->
-        <div id="aba-medico" class="aba-conteudo">
-            <div class="form-linha">
-                <div class="form-grupo">
-                    <label for="observacoes_medicas">Observações Médicas / Alergias / Restrições</label>
-                    <textarea id="observacoes_medicas" name="observacoes_medicas" class="input-limpo" rows="3" style="resize: vertical;"></textarea>
-                </div>
-            </div>
-
-            <div class="form-linha">
-                <div class="form-grupo form-metade">
-                    <label for="exame_medico_data">Data do Exame Médico (Piscina)</label>
-                    <input type="date" id="exame_medico_data" name="exame_medico_data" class="input-limpo">
-                </div>
-
-                <div class="form-grupo form-metade">
-                    <label for="exame_medico_validade">Validade do Exame Médico</label>
-                    <input type="date" id="exame_medico_validade" name="exame_medico_validade" class="input-limpo">
-                </div>
-            </div>
-        </div>
-
-        <!-- BOTÕES DE AÇÃO GLOBAIS -->
-        <div class="form-acoes">
-            <a href="/" class="btn-custom btn-cancelar">Cancelar</a>
-            <button type="submit" id="btnSalvar" class="btn-custom btn-salvar">Salvar Aluno</button>
-        </div>
-        
     </form>
 </div>
 
@@ -497,12 +567,105 @@
 </div>
 
 <script>
+    // Atualiza o estado visual das abas e do botão salvar globalmente
+    function verificarEstadoBotao() {
+        const form = document.getElementById("formAluno");
+        const inputsValidaveis = form.querySelectorAll(".campo-validavel");
+        const btnSalvar = document.getElementById("btnSalvar");
+        
+        let formPreenchido = true;
+        let abasComPendencia = {
+            'aba-dados-pessoais': false,
+            'aba-responsavel': false,
+            'aba-medico': false
+        };
+
+        inputsValidaveis.forEach(input => {
+            if (input.value.trim() === "") {
+                formPreenchido = false;
+                const aba = input.closest('.aba-conteudo');
+                if (aba) {
+                    abasComPendencia[aba.id] = true;
+                }
+            }
+        });
+
+        if (btnSalvar) {
+            btnSalvar.disabled = !formPreenchido;
+        }
+
+        // Atualiza indicadores visuais (🔴)
+        const mapeamentoAlertas = {
+            'aba-dados-pessoais': 'alerta_dados',
+            'aba-responsavel': 'alerta_resp',
+            'aba-medico': 'alerta_medico'
+        };
+
+        for (const [idAba, idAlerta] of Object.entries(mapeamentoAlertas)) {
+            const spanAlerta = document.getElementById(idAlerta);
+            if (spanAlerta) {
+                if (abasComPendencia[idAba]) {
+                    spanAlerta.style.display = 'inline-block';
+                } else {
+                    spanAlerta.style.display = 'none';
+                }
+            }
+        }
+    }
+
+    function alternarModo() {
+        const modo = document.querySelector('input[name="modo_tela"]:checked').value;
+        const areaConsulta = document.getElementById('area-consulta');
+        const areaFormulario = document.getElementById('area-formulario');
+        const form = document.getElementById('formAluno');
+
+        // Limpa a matrícula visual ao alternar o modo
+        document.getElementById('box-matricula').style.display = 'none';
+        document.getElementById('display_matricula').innerText = '';
+
+        if (modo === 'consulta') {
+            areaConsulta.style.display = 'flex';
+            areaFormulario.style.display = 'none';
+            form.reset();
+            
+            // Restaura o estado visual da barra de busca
+            document.getElementById('label_busca_smart').innerText = 'Informe a matrícula ou o CPF';
+            document.getElementById('btnExecutarBusca').style.display = 'inline-block';
+
+            document.getElementById('foto_aluno').style.display = 'none';
+            document.getElementById('foto_placeholder').style.display = 'block';
+            document.getElementById('containerContatos').innerHTML = '';
+        } else if (modo === 'cadastro') {
+            areaConsulta.style.display = 'none';
+            areaFormulario.style.display = 'block';
+            form.reset();
+            
+            // Restaura o estado visual da barra de busca por precaução
+            document.getElementById('label_busca_smart').innerText = 'Informe a matrícula ou o CPF';
+            document.getElementById('btnExecutarBusca').style.display = 'inline-block';
+            
+            document.getElementById('aluno_id').value = '';
+            document.getElementById('usuario_id').value = '';
+            document.getElementById('responsavel_id').value = '';
+            
+            document.getElementById('foto_aluno').style.display = 'none';
+            document.getElementById('foto_placeholder').style.display = 'block';
+            
+            document.getElementById('containerContatos').innerHTML = '';
+            adicionarContatoLinha();
+            mudarAba('dados-pessoais');
+            verificarEstadoBotao();
+        }
+    }
+
     function mudarAba(nomeAba) {
         document.querySelectorAll('.aba-conteudo').forEach(el => el.classList.remove('ativa'));
         document.querySelectorAll('.aba-btn').forEach(el => el.classList.remove('ativa'));
         
         document.getElementById('aba-' + nomeAba).classList.add('ativa');
-        event.currentTarget.classList.add('ativa');
+        
+        const btnClicado = document.querySelector(`.aba-btn[onclick="mudarAba('${nomeAba}')"]`);
+        if (btnClicado) btnClicado.classList.add('ativa');
     }
 
     function adicionarContatoLinha(nome = '', telefone = '', tipo = 'Mãe') {
@@ -519,7 +682,7 @@
                     </div>
                     <div class="form-grupo form-metade">
                         <label>Telefone</label>
-                        <input type="text" name="contato_telefone[]" value="${telefone}" class="input-limpo" placeholder="(11) 99999-9999">
+                        <input type="text" name="contato_telefone[]" value="${telefone}" class="input-limpo" placeholder="(11) 99999-9999" oninput="aplicarMascaraTelefone(this)">
                     </div>
                     <div class="form-grupo form-metade">
                         <label>Relacionamento</label>
@@ -553,10 +716,21 @@
         document.getElementById('data_nascimento').value = d.data_nascimento || '';
         document.getElementById('sexo').value = d.sexo || '';
         document.getElementById('email').value = d.email || '';
-        document.getElementById('telefone').value = d.telefone || '';
+        
+        // Aplica a máscara ao preencher via busca
+        const telInput = document.getElementById('telefone');
+        telInput.value = d.telefone || '';
+        aplicarMascaraTelefone(telInput);
+
         document.getElementById('observacoes_medicas').value = d.observacoes_medicas || '';
         document.getElementById('exame_medico_data').value = d.exame_medico_data || '';
         document.getElementById('exame_medico_validade').value = d.exame_medico_validade || '';
+
+        // Exibe visualmente o ID da matrícula
+        if (d.id) {
+            document.getElementById('display_matricula').innerText = String(d.id).padStart(4, '0');
+            document.getElementById('box-matricula').style.display = 'block';
+        }
 
         const imgFoto = document.getElementById('foto_aluno');
         const phFoto = document.getElementById('foto_placeholder');
@@ -573,9 +747,19 @@
         if (d.responsavel) {
             document.getElementById('responsavel_id').value = d.responsavel.id || '';
             document.getElementById('resp_nome').value = d.responsavel.nome_completo || '';
-            document.getElementById('resp_cpf').value = d.responsavel.cpf || '';
-            document.getElementById('resp_telefone').value = d.responsavel.telefone || '';
-            document.getElementById('resp_cep').value = d.responsavel.cep || '';
+            
+            const rCpf = document.getElementById('resp_cpf');
+            rCpf.value = d.responsavel.cpf || '';
+            aplicarMascaraCPF(rCpf);
+            
+            const rTel = document.getElementById('resp_telefone');
+            rTel.value = d.responsavel.telefone || '';
+            aplicarMascaraTelefone(rTel);
+            
+            const rCep = document.getElementById('resp_cep');
+            rCep.value = d.responsavel.cep || '';
+            aplicarMascaraCEP(rCep);
+            
             document.getElementById('resp_endereco').value = d.responsavel.endereco || '';
             document.getElementById('resp_bairro').value = d.responsavel.bairro || '';
             document.getElementById('resp_cidade').value = d.responsavel.cidade || '';
@@ -597,10 +781,28 @@
         if (d.contatos && d.contatos.length > 0) {
             d.contatos.forEach(c => {
                 adicionarContatoLinha(c.nome_completo, c.telefone, c.tipo);
+                // Aplica a máscara para o último elemento adicionado
+                const ultTel = containerContatos.lastElementChild.querySelector('input[name="contato_telefone[]"]');
+                if (ultTel) aplicarMascaraTelefone(ultTel);
             });
         } else {
             adicionarContatoLinha();
         }
+        
+        document.getElementById('area-formulario').style.display = 'block';
+        
+        // Aplica ajustes visuais na barra de busca (Opção Consulta)
+        const inputBusca = document.getElementById('busca_smart');
+        let valorBusca = inputBusca.value.replace(/\D/g, '');
+        if (valorBusca.length === 11) {
+            inputBusca.value = valorBusca;
+            aplicarMascaraCPF(inputBusca);
+        }
+        document.getElementById('label_busca_smart').innerText = 'Responsável';
+        document.getElementById('btnExecutarBusca').style.display = 'none';
+
+        mudarAba('dados-pessoais');
+        verificarEstadoBotao();
     }
 
     function executarBuscaAluno(termoOverride = null) {
@@ -651,6 +853,19 @@
     }
 
     document.addEventListener("DOMContentLoaded", function() {
+        
+        // --- 1. CHAMADAS DAS FUNÇÕES GLOBAIS DE UI/UX ---
+        if (typeof configurarEnterComoTab === "function") {
+            configurarEnterComoTab();
+        }
+
+        const inputFoto = document.getElementById('foto_arquivo');
+        const imgFoto = document.getElementById('foto_aluno');
+        const phFoto = document.getElementById('foto_placeholder');
+        if (typeof ativarPreviewImagem === "function") {
+            ativarPreviewImagem(inputFoto, imgFoto, phFoto);
+        }
+        
         adicionarContatoLinha();
 
         const btnBusca = document.getElementById('btnExecutarBusca');
@@ -661,33 +876,41 @@
             inputBusca.addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
                     e.preventDefault();
+                    e.stopPropagation();
                     executarBuscaAluno();
                 }
             });
         }
 
+        // --- 2. AJUSTE DA LÓGICA DE VALIDAÇÃO ---
         const form = document.getElementById("formAluno");
         const inputsValidaveis = form.querySelectorAll(".campo-validavel");
-        const btnSalvar = document.getElementById("btnSalvar");
 
-        function validarFormulario() {
-            let valido = true;
-            inputsValidaveis.forEach(input => {
-                const erroSpan = document.querySelector(`[id-erro="${input.id}"]`);
+        function exibirErro(e) {
+            const input = e.target;
+            const erroSpan = document.querySelector(`[id-erro="${input.id}"]`);
+            if (erroSpan) {
                 if (input.value.trim() === "") {
-                    valido = false;
-                    if (erroSpan) erroSpan.style.display = "block";
+                    erroSpan.style.display = "block";
                 } else {
-                    if (erroSpan) erroSpan.style.display = "none";
+                    erroSpan.style.display = "none";
                 }
-            });
-            btnSalvar.disabled = !valido;
+            }
+        }
+
+        function ocultarErro(e) {
+            const erroSpan = document.querySelector(`[id-erro="${e.target.id}"]`);
+            if (erroSpan) erroSpan.style.display = "none";
         }
 
         inputsValidaveis.forEach(input => {
-            input.addEventListener("input", validarFormulario);
-            input.addEventListener("change", validarFormulario);
+            input.addEventListener("input", verificarEstadoBotao);
+            input.addEventListener("focus", ocultarErro);
+            input.addEventListener("blur", exibirErro);
         });
+
+        // Configuração inicial do estado do botão
+        verificarEstadoBotao();
     });
 </script>
 {% endblock %}

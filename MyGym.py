@@ -39,6 +39,7 @@
 # 08/08/26: Migração para suporte a múltiplos certificados via tabela 'professor_certificados'.
 # 10/08/26: Inclusão das rotas de cadastro, busca e persistência para Alunos.
 # 10/08/26: Aprimoramento da API de busca de alunos para suportar localização via CPF do responsável com suporte a múltiplos vínculos (irmãos).
+# 12/08/26: Inclusão de limpeza de caracteres não numéricos (máscaras) antes do INSERT/UPDATE na rota de salvar aluno.
 # ==============================================================================
 
 import os
@@ -847,11 +848,17 @@ def buscar_aluno():
 def salvar_aluno():
     aluno_id = request.form.get('aluno_id')
     nome_completo = request.form.get('nome_completo')
+    
     cpf = request.form.get('cpf')
+    if cpf: cpf = re.sub(r'\D', '', cpf)
+        
     data_nascimento = request.form.get('data_nascimento')
     sexo = request.form.get('sexo')
     email = request.form.get('email')
+    
     telefone = request.form.get('telefone')
+    if telefone: telefone = re.sub(r'\D', '', telefone)
+        
     observacoes_medicas = request.form.get('observacoes_medicas')
     exame_medico_data = request.form.get('exame_medico_data')
     exame_medico_validade = request.form.get('exame_medico_validade')
@@ -862,9 +869,16 @@ def salvar_aluno():
     
     resp_id = request.form.get('responsavel_id')
     resp_nome = request.form.get('resp_nome')
+    
     resp_cpf = request.form.get('resp_cpf')
+    if resp_cpf: resp_cpf = re.sub(r'\D', '', resp_cpf)
+        
     resp_telefone = request.form.get('resp_telefone')
+    if resp_telefone: resp_telefone = re.sub(r'\D', '', resp_telefone)
+        
     resp_cep = request.form.get('resp_cep')
+    if resp_cep: resp_cep = re.sub(r'\D', '', resp_cep)
+        
     resp_endereco = request.form.get('resp_endereco')
     resp_bairro = request.form.get('resp_bairro')
     resp_cidade = request.form.get('resp_cidade')
@@ -942,7 +956,10 @@ def salvar_aluno():
             
             for i in range(len(nomes_contato)):
                 c_nome = nomes_contato[i].strip()
+                
                 c_tel = telefones_contato[i].strip()
+                if c_tel: c_tel = re.sub(r'\D', '', c_tel)
+                
                 c_tipo = tipos_contato[i].strip()
                 
                 if c_nome and c_tel:

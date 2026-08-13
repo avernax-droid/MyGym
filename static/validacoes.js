@@ -9,6 +9,7 @@
 // HISTÓRICO DE ALTERAÇÕES:
 // 05/08/26: Criação do arquivo e migração das funções globais do cadastro.
 // 07/08/26: Inclusão das funções de máscara de CEP e busca de endereço via API (ViaCEP).
+// 12/08/26: Adição do comportamento Enter como Tab e Preview de Imagem de Upload.
 // ==============================================================================
 
 // --- FUNÇÕES DE MÁSCARA E LIMPEZA ---
@@ -90,7 +91,7 @@ function aplicarMascaraCEP(input) {
 async function buscarEnderecoViaCEP(cep, mapaCampos) {
     const cepLimpo = cep.replace(/\D/g, '');
     
-    if (cepLimpo.length !== 8) return; // Só busca se o CEP estiver completo
+    if (cepLimpo.length !== 8) return;
 
     try {
         const response = await fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`);
@@ -115,4 +116,73 @@ async function buscarEnderecoViaCEP(cep, mapaCampos) {
     } catch (error) {
         console.error("Erro ao buscar CEP na API ViaCEP:", error);
     }
+}
+
+// ==============================================================================
+// COMPORTAMENTO GERAL DA INTERFACE (UI/UX)
+// ==============================================================================
+
+function configurarEnterComoTab() {
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            const elementoAtivo = document.activeElement;
+            
+            // Ignora se for textarea, botões normais ou de submit
+            if (!elementoAtivo || 
+                elementoAtivo.tagName.toLowerCase() === 'textarea' || 
+                elementoAtivo.tagName.toLowerCase() === 'button' ||
+                elementoAtivo.type === 'submit') {
+                return;
+            }
+
+            e.preventDefault(); 
+
+            // Busca os elementos focáveis visíveis no formulário ou contexto atual
+            const form = elementoAtivo.closest('form') || document;
+            const elementosFocaveis = Array.from(form.querySelectorAll('input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])'));
+            
+            const indexAtual = elementosFocaveis.indexOf(elementoAtivo);
+            if (indexAtual > -1 && indexAtual < elementosFocaveis.length - 1) {
+                let proximoIndex = indexAtual + 1;
+                
+                while (proximoIndex < elementosFocaveis.length) {
+                    const proximoElemento = elementosFocaveis[proximoIndex];
+                    if (proximoElemento.offsetWidth > 0 && proximoElemento.offsetHeight > 0) {
+                        proximoElemento.focus();
+                        break;
+                    }
+                    proximoIndex++;
+                }
+            }
+        }
+    });
+}
+
+function ativarPreviewImagem(inputElement, imgElement, placeholderElement) {
+    if (!inputElement) return;
+    
+    inputElement.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                if (imgElement) {
+                    imgElement.src = evt.target.result;
+                    imgElement.style.display = 'block';
+                }
+                if (placeholderElement) {
+                    placeholderElement.style.display = 'none';
+                }
+            }
+            reader.readAsDataURL(file);
+        } else {
+            if (imgElement) {
+                imgElement.src = '';
+                imgElement.style.display = 'none';
+            }
+            if (placeholderElement) {
+                placeholderElement.style.display = 'block';
+            }
+        }
+    });
 }
