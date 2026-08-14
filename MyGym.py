@@ -40,6 +40,13 @@
 # 10/08/26: Inclusão das rotas de cadastro, busca e persistência para Alunos.
 # 10/08/26: Aprimoramento da API de busca de alunos para suportar localização via CPF do responsável com suporte a múltiplos vínculos (irmãos).
 # 12/08/26: Inclusão de limpeza de caracteres não numéricos (máscaras) antes do INSERT/UPDATE na rota de salvar aluno.
+# 13/08/26: Inclusão da rota GET para o módulo de Matrículas e Grade.
+# 13/08/26: Criação da rota POST /backoffice/matriculas/salvar para processar e persistir matrícula e grade.
+# 14/08/26: Atualização da API /api/alunos/buscar para retornar dados da matrícula e grade.
+# 14/08/26: Criação da rota assíncrona /api/matriculas/validar_horario para trava de colisão de agendas na base de dados.
+# 14/08/26: Correção no parsing da taxa de matrícula para evitar inflação decimal em conflito com o Front-end.
+# 14/08/26: Implementação de lógica UPDATE na rota de salvar matrícula e suporte ao campo oculto matricula_id.
+# 14/08/26: Correção de parsing e formatação de horas (TIME) para evitar erro 1292 no MySQL ao atualizar grade de matrículas.
 # ==============================================================================
 
 import os
@@ -814,6 +821,51 @@ def buscar_aluno():
             contatos_rows = cursor.fetchall()
             contatos_lista = [{'nome_completo': row[0], 'telefone': row[1], 'tipo': row[2]} for row in contatos_rows]
             
+            # ==============================================================================
+            # Buscar dados da matrícula ativa e grade correspondente
+            # ==============================================================================
+            cursor.execute("""
+                SELECT id, tipo_plano, data_inicio, data_fim, dia_vencimento, taxa_matricula, status 
+                FROM matriculas 
+                WHERE aluno_id = %s AND status = 'Ativa' 
+                ORDER BY id DESC LIMIT 1
+            """, (aluno_id,))
+            matricula_row = cursor.fetchone()
+            
+            matricula_data = None
+            if matricula_row:
+                mat_id = matricula_row[0]
+                matricula_data = {
+                    'id': mat_id,
+                    'tipo_plano': matricula_row[1],
+                    'data_inicio': str(matricula_row[2]) if matricula_row[2] else '',
+                    'data_fim': str(matricula_row[3]) if matricula_row[3] else '',
+                    'dia_vencimento': matricula_row[4],
+                    'taxa_matricula': str(matricula_row[5]) if matricula_row[5] else '',
+                    'status': matricula_row[6],
+                    'grade': []
+                }
+                
+                cursor.execute("""
+                    SELECT modalidade, dias_semana, horario 
+                    FROM matricula_grade 
+                    WHERE matricula_id = %s
+                """, (mat_id,))
+                grade_rows = cursor.fetchall()
+                for grow in grade_rows:
+                    horario_str = str(grow[2]) if grow[2] else ''
+                    if horario_str:
+                        # Corrige formatação de tempo como '9:00:00' para '09:00' para evitar erro MySQL
+                        partes = horario_str.split(':')
+                        if len(partes) >= 2:
+                            horario_str = f"{int(partes[0]):02d}:{partes[1]}"
+                        
+                    matricula_data['grade'].append({
+                        'modalidade': grow[0],
+                        'dias_semana': grow[1],
+                        'horario': horario_str
+                    })
+            
             return jsonify({
                 'encontrado': True,
                 'multiplos': False,
@@ -832,7 +884,8 @@ def buscar_aluno():
                     'exame_medico_data': str(aluno[11]) if aluno[11] else '',
                     'exame_medico_validade': str(aluno[12]) if aluno[12] else '',
                     'responsavel': resp_data,
-                    'contatos': contatos_lista
+                    'contatos': contatos_lista,
+                    'matricula': matricula_data
                 }
             })
         except Exception as e:
@@ -1047,6 +1100,147 @@ def salvar_permissoes():
             conn.close()
             
     return jsonify({'sucesso': False})
+
+# ==============================================================================
+# ROTAS DE MATRÍCULAS
+# ==============================================================================
+
+@app.route('/api/matriculas/validar_horario', methods=['POST'])
+@requer_permissao('mod_matricula')
+def validar_horario_matricula():
+    dados = request.get_json()
+    aluno_id = dados.get('aluno_id')
+    modalidade_atual = dados.get('modalidade_atual')
+    horarios = dados.get('horarios', [])
+
+    if not aluno_id or not horarios:
+        return jsonify({'conflito': False})
+
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            for item in horarios:
+                dia = item.get('dia')
+                horario = item.get('horario')
+                
+                if len(horario) == 5:
+                    horario_str = horario + ':00'
+                else:
+                    horario_str = horario
+
+                sql = """
+                    SELECT mg.modalidade 
+                    FROM matricula_grade mg
+                    JOIN matriculas m ON mg.matricula_id = m.id
+                    WHERE m.aluno_id = %s AND m.status = 'Ativa' 
+                      AND mg.modalidade != %s 
+                      AND mg.dias_semana = %s AND mg.horario = %s
+                    LIMIT 1
+                """
+                cursor.execute(sql, (aluno_id, modalidade_atual, dia, horario_str))
+                row = cursor.fetchone()
+                
+                if row:
+                    return jsonify({
+                        'conflito': True,
+                        'mensagem': f"O aluno já possui uma atividade ({row[0]}) agendada no banco de dados para {dia} às {horario}."
+                    })
+            return jsonify({'conflito': False})
+        except Exception as e:
+            print(f"Erro ao validar horários no banco: {e}")
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return jsonify({'conflito': False})
+
+@app.route('/backoffice/matriculas/nova')
+@requer_permissao('mod_matricula')
+def nova_matricula():
+    return render_template('backoffice/cadastro_matricula.html')
+
+@app.route('/backoffice/matriculas/salvar', methods=['POST'])
+@requer_permissao('mod_matricula')
+def salvar_matricula():
+    matricula_id = request.form.get('matricula_id')
+    aluno_id = request.form.get('aluno_id')
+    tipo_plano = request.form.get('tipo_plano')
+    data_inicio = request.form.get('data_inicio')
+    data_fim = request.form.get('data_fim')
+    dia_vencimento = request.form.get('dia_vencimento')
+    taxa_matricula_str = request.form.get('taxa_matricula')
+    
+    if not data_fim:
+        data_fim = None
+        
+    taxa_matricula = 0.00
+    if taxa_matricula_str:
+        taxa_limpa = taxa_matricula_str.replace('R$', '').strip()
+        if ',' in taxa_limpa:
+            taxa_limpa = taxa_limpa.replace('.', '').replace(',', '.')
+        try:
+            taxa_matricula = float(taxa_limpa)
+        except ValueError:
+            taxa_matricula = 0.00
+
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            
+            if matricula_id:
+                # --- UPDATE (Matrícula Existente) ---
+                sql_matricula = """
+                    UPDATE matriculas 
+                    SET tipo_plano=%s, data_inicio=%s, data_fim=%s, dia_vencimento=%s, taxa_matricula=%s 
+                    WHERE id=%s
+                """
+                cursor.execute(sql_matricula, (tipo_plano, data_inicio, data_fim, dia_vencimento, taxa_matricula, matricula_id))
+                
+                # Deleta a grade antiga para inserir a nova
+                cursor.execute("DELETE FROM matricula_grade WHERE matricula_id = %s", (matricula_id,))
+            else:
+                # --- INSERT (Nova Matrícula) ---
+                sql_matricula = """
+                    INSERT INTO matriculas (aluno_id, tipo_plano, data_inicio, data_fim, dia_vencimento, taxa_matricula, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                """
+                cursor.execute(sql_matricula, (aluno_id, tipo_plano, data_inicio, data_fim, dia_vencimento, taxa_matricula, 'Ativa'))
+                matricula_id = cursor.lastrowid
+            
+            # --- Gravação em lote da Grade ---
+            modalidades = request.form.getlist('grade_modalidade[]')
+            dias = request.form.getlist('grade_dias[]')
+            horarios = request.form.getlist('grade_horario[]')
+            
+            for i in range(len(modalidades)):
+                mod = modalidades[i]
+                dia = dias[i] if i < len(dias) else ''
+                horario = horarios[i] if i < len(horarios) else ''
+                
+                if mod and dia and horario:
+                    # Segurança adicional: Garante que a string que vai pro MySQL esteja em formato HH:MM correto
+                    partes = horario.split(':')
+                    if len(partes) >= 2:
+                        horario = f"{int(partes[0]):02d}:{partes[1]}"
+                        
+                    sql_grade = """
+                        INSERT INTO matricula_grade (matricula_id, modalidade, dias_semana, horario)
+                        VALUES (%s, %s, %s, %s)
+                    """
+                    cursor.execute(sql_grade, (matricula_id, mod, dia, horario))
+                    
+            conn.commit()
+            print(f"Matrícula {matricula_id} e grade salvas com sucesso para o Aluno {aluno_id}.")
+        except Exception as e:
+            print(f"Erro ao salvar matrícula no banco: {e}")
+            conn.rollback()
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return redirect(url_for('nova_matricula'))
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

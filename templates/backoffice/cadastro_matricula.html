@@ -1,0 +1,934 @@
+{# ==============================================================================
+ PROJETO: MyGym
+ MÓDULO: templates/backoffice/cadastro_matricula.html
+ DATA DE CRIAÇÃO: 13/08/26
+ TÍTULO: Cadastro de Matrículas e Grade
+ FUNÇÃO: Gerenciar a contratação de planos pelos alunos e definir dinamicamente os 
+         horários de aula com base no componente de modalidades central.
+         
+ HISTÓRICO DE ALTERAÇÕES:
+ 13/08/26: Aplicação de contraste (invert) nos ícones de calendário/relógio e correção do background de opções (Select).
+ 13/08/26: Refatoração UI/UX: Aplicação de estilo ghost (transparente) no campo Tipo de Plano.
+ 13/08/26: Refatoração da Grade: Criação do Modal "Dias e Horários" permitindo a seleção múltipla de dias por modalidade, com acionamento inteligente de campos de hora.
+ 14/08/26: Ajuste na renderização da grade dinâmica para não sobrescrever histórico de horas e correção na habilitação do botão "Efetivar Matrícula".
+ 14/08/26: Alteração do rótulo de busca de aluno e implementação de máscara de edição dinâmica (Matrícula vs CPF).
+ 14/08/26: Integração com static/validacoes.js, API de histórico de matrículas e trava contra choque de horários (Front-end e Back-end assíncrono).
+ 14/08/26: Inclusão do botão "X" para fechar o modal de horários sem aplicar alterações e formatação da matrícula com zeros à esquerda.
+ 14/08/26: Inclusão do campo oculto matricula_id, suporte para carregamento de edição e renomeação do botão de submissão para "Salvar".
+============================================================================== #}
+
+{% extends "base.html" %}
+
+{% block title %}Matrícula - MyGym{% endblock %}
+
+{% block head %}
+<style>
+    .container-cadastro {
+        background-color: #001524;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 2.5rem 3rem;
+        border-radius: 8px;
+        width: 100%;
+        max-width: 800px;
+        box-shadow: 0px 15px 35px rgba(0, 0, 0, 0.5);
+        color: #FFFFFF;
+        box-sizing: border-box;
+        position: relative;
+        max-height: 90vh;
+        overflow-y: auto; 
+    }
+
+    .btn-fechar-form {
+        position: absolute;
+        top: 1rem;
+        right: 1.5rem;
+        font-size: 1.8rem;
+        color: #FFFFFF;
+        text-decoration: none;
+        opacity: 0.6;
+        transition: opacity 0.3s ease;
+        line-height: 1;
+    }
+
+    .btn-fechar-form:hover {
+        opacity: 1;
+    }
+
+    .header-pagina {
+        text-align: left;
+        margin-bottom: 1.5rem;
+    }
+
+    .header-pagina h1 {
+        font-size: 1.8rem;
+        font-weight: 600;
+        margin: 0;
+        letter-spacing: 1px;
+        color: #FFFFFF;
+        font-style: normal;
+    }
+
+    .form-linha {
+        display: flex;
+        gap: 1.5rem;
+        margin-bottom: 1rem;
+    }
+
+    .form-grupo {
+        margin-bottom: 1rem;
+        text-align: left;
+        width: 100%;
+    }
+
+    .form-metade { flex: 1; }
+    .form-terco { flex: 0.5; }
+    .form-largo { flex: 2; }
+
+    .form-grupo label {
+        display: block;
+        margin-bottom: 0.4rem;
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    .input-limpo {
+        width: 100%;
+        padding: 0.9rem 1rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+        color: #FFFFFF;
+        font-family: var(--fonte-principal);
+        font-size: 1rem;
+        box-sizing: border-box;
+        transition: all 0.3s ease;
+    }
+
+    .input-limpo[readonly] {
+        background-color: rgba(255, 255, 255, 0.02);
+        color: rgba(255, 255, 255, 0.5);
+        cursor: not-allowed;
+    }
+
+    .input-limpo:focus:not([readonly]) {
+        outline: none;
+        border-color: #80D5C9;
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+    
+    .select-estilo-btn {
+        background-color: transparent;
+        color: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 6px;
+        padding: 0.9rem 1rem;
+        font-family: var(--fonte-principal);
+        font-size: 1rem;
+        width: 100%;
+        box-sizing: border-box;
+        transition: all 0.3s ease;
+        appearance: none;
+        cursor: pointer;
+        background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+        background-repeat: no-repeat;
+        background-position: right 1rem top 50%;
+        background-size: 0.65rem auto;
+    }
+
+    .select-estilo-btn:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+        color: #FFFFFF;
+        border-color: rgba(255, 255, 255, 0.4);
+    }
+
+    .select-estilo-btn:focus {
+        outline: none;
+        border-color: #80D5C9;
+        color: #FFFFFF;
+    }
+
+    .select-estilo-btn option, .input-limpo option {
+        background-color: #002B49;
+        color: #FFFFFF;
+        font-size: 0.95rem;
+    }
+
+    .input-limpo::-webkit-calendar-picker-indicator,
+    .input-limpo::-webkit-time-picker-indicator {
+        filter: invert(1) opacity(0.6);
+        cursor: pointer;
+    }
+
+    .msg-erro {
+        display: none;
+        color: #ff6b6b;
+        font-size: 0.8rem;
+        margin-top: 0.3rem;
+    }
+    
+    .form-acoes {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+
+    .btn-custom {
+        padding: 0.9rem 2.5rem;
+        border-radius: 6px;
+        font-family: var(--fonte-principal);
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        text-decoration: none;
+        text-align: center;
+        transition: all 0.3s ease;
+        border: none;
+    }
+
+    .btn-salvar {
+        background-color: #80D5C9;
+        color: #002B49;
+    }
+
+    .btn-salvar:disabled {
+        background-color: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.3);
+        cursor: not-allowed;
+    }
+
+    .btn-salvar:not(:disabled):hover {
+        background-color: #ffffff;
+    }
+
+    .btn-cancelar {
+        background-color: transparent;
+        color: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-cancelar:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+        color: #FFFFFF;
+    }
+
+    .divisor-secao {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        margin: 1.5rem 0 1rem 0;
+        padding-bottom: 0.5rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+    .linha-grade {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        background-color: rgba(255, 255, 255, 0.03);
+        padding: 1rem;
+        border-radius: 6px;
+        margin-bottom: 0.5rem;
+        border-left: 4px solid #80D5C9;
+    }
+    
+    .modalidade-titulo {
+        font-weight: 600;
+        color: #80D5C9;
+        min-width: 150px;
+    }
+
+    .modal-modalidades {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background-color: rgba(0, 0, 0, 0.7);
+        z-index: 2000;
+        justify-content: center;
+        align-items: center;
+        backdrop-filter: blur(4px);
+    }
+    
+    .modal-modalidades-content {
+        background-color: #001524;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        padding: 2rem;
+        border-radius: 8px;
+        width: 100%;
+        max-width: 600px;
+        max-height: 80vh;
+        overflow-y: auto;
+        color: #FFFFFF;
+        box-shadow: 0px 15px 35px rgba(0,0,0,0.5);
+    }
+    
+    .checkbox-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 0.6rem;
+    }
+    
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.8);
+        cursor: pointer;
+    }
+    
+    .checkbox-label input[type="checkbox"] {
+        accent-color: #80D5C9;
+        transform: scale(1.1);
+        margin: 0;
+    }
+    
+    .dia-horario-row {
+        background-color: rgba(255,255,255,0.02);
+        padding: 0.6rem 1rem;
+        border-radius: 6px;
+        border: 1px solid rgba(255,255,255,0.05);
+        transition: background-color 0.3s ease;
+    }
+    .dia-horario-row:hover {
+        background-color: rgba(255,255,255,0.05);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-cadastro">
+    <a href="/" class="btn-fechar-form" title="Fechar">&times;</a>
+
+    <form id="formMatricula" action="/backoffice/matriculas/salvar" method="POST">
+        <input type="hidden" id="aluno_id" name="aluno_id" value="">
+        <input type="hidden" id="matricula_id" name="matricula_id" value="">
+
+        <div class="form-linha" style="margin-bottom: 0.5rem; justify-content: space-between; align-items: flex-start;">
+            
+            <div style="display: flex; flex-direction: column;">
+                <header class="header-pagina">
+                    <h1>Matrícula</h1>
+                </header>
+
+                <div class="form-grupo" style="flex: unset; width: auto; margin-bottom: 0;">
+                    <label for="busca_aluno">Informe o CPF ou a Matrícula do Aluno *</label>
+                    <input type="text" id="busca_aluno" required 
+                           placeholder="Ex: 000.000.000-00" class="input-limpo" style="max-width: 250px;">
+                    <span class="msg-erro" id-erro="busca_aluno">Aluno não encontrado.</span>
+                </div>
+            </div>
+            
+            <div class="foto-container" style="display: flex; align-items: center; justify-content: center; width: 130px; height: 130px; border-radius: 8px; border: 1px dashed rgba(255,255,255,0.4); background-color: rgba(255,255,255,0.05); overflow: hidden; position: relative; margin-top: 0.5rem;">
+                <svg id="foto_placeholder" xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute;">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <img id="foto_aluno" src="" alt="Foto do Aluno" style="width: 100%; height: 100%; object-fit: cover; display: none; position: relative; z-index: 2;">
+            </div>
+        </div>
+
+        <fieldset id="area_dados_matricula" style="border: none; padding: 0; margin: 0;" disabled>
+            
+            <div class="form-linha">
+                <div class="form-grupo form-largo">
+                    <label for="nome_completo">Aluno Selecionado</label>
+                    <input type="text" id="nome_completo" class="input-limpo" readonly>
+                </div>
+            </div>
+
+            <div class="divisor-secao">Plano e Pagamento</div>
+
+            <div class="form-linha">
+                <div class="form-grupo form-terco">
+                    <label for="tipo_plano">Tipo de Plano *</label>
+                    <select id="tipo_plano" name="tipo_plano" class="select-estilo-btn campo-validavel" required>
+                        <option value="">Selecione...</option>
+                        <option value="Mensal">Mensal</option>
+                        <option value="Trimestral">Trimestral</option>
+                        <option value="Semestral">Semestral</option>
+                        <option value="Anual">Anual</option>
+                    </select>
+                </div>
+
+                <div class="form-grupo form-terco">
+                    <label for="data_inicio">Data de Início *</label>
+                    <input type="date" id="data_inicio" name="data_inicio" class="input-limpo campo-validavel" required>
+                </div>
+
+                <div class="form-grupo form-terco">
+                    <label for="data_fim">Data de Fim</label>
+                    <input type="date" id="data_fim" name="data_fim" class="input-limpo">
+                </div>
+            </div>
+
+            <div class="form-linha">
+                <div class="form-grupo form-terco">
+                    <label for="dia_vencimento">Dia do Vencimento *</label>
+                    <input type="number" id="dia_vencimento" name="dia_vencimento" min="1" max="31" class="input-limpo campo-validavel" required placeholder="Ex: 10">
+                </div>
+
+                <div class="form-grupo form-terco">
+                    <label for="taxa_matricula">Taxa de Matrícula (R$)</label>
+                    <input type="text" id="taxa_matricula" name="taxa_matricula" class="input-limpo" placeholder="R$ 0,00" oninput="formatarMoeda(this)">
+                </div>
+            </div>
+
+            <div class="divisor-secao">Grade de atividades e horários</div>
+            
+            <div class="form-linha" style="align-items: center; margin-bottom: 1.5rem;">
+                <button type="button" id="btnAbrirModalModalidades" class="btn-custom btn-cancelar" style="width: auto; font-size: 0.9rem; padding: 0.7rem 1.5rem;">
+                    <i class="fas fa-calendar-alt" style="margin-right: 8px;"></i> Adicionar Modalidades à Grade
+                </button>
+            </div>
+
+            <div id="containerGrade" style="margin-bottom: 1rem;">
+                <!-- Exemplo dinâmico gerado via JS -->
+            </div>
+
+            <div class="form-acoes">
+                <a href="/" class="btn-custom btn-cancelar">Cancelar</a>
+                <button type="submit" id="btnSalvar" class="btn-custom btn-salvar">Salvar</button>
+            </div>
+            
+        </fieldset>
+    </form>
+</div>
+
+<!-- INCLUSÃO DO COMPONENTE DE MODALIDADES -->
+{% include 'componentes/modal_modalidades.html' %}
+
+<!-- NOVO MODAL: SELEÇÃO FLUIDA DE DIAS DA SEMANA E HORÁRIOS -->
+<div id="modalDiasHorarios" class="modal-modalidades">
+    <div class="modal-modalidades-content" style="max-width: 450px; position: relative;">
+        <button type="button" id="btnFecharModalDiasX" style="position: absolute; top: 1.5rem; right: 1.5rem; background: transparent; border: none; color: #FFFFFF; font-size: 1.8rem; cursor: pointer; opacity: 0.6; transition: opacity 0.3s ease; line-height: 1; padding: 0;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="Fechar">&times;</button>
+        <h3 id="tituloModalDias" style="margin-top: 0; margin-bottom: 1.5rem; font-size: 1.2rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem; color: #80D5C9; padding-right: 2rem;">Definir Horários</h3>
+        
+        <input type="hidden" id="modalidadeAtualIndex">
+
+        <div class="checkbox-grid" style="gap: 0.8rem;">
+            
+            <div class="dia-horario-row" style="display: flex; align-items: center; justify-content: space-between;">
+                <label class="checkbox-label"><input type="checkbox" class="chk-dia" value="Segunda-feira"> Segunda-feira</label>
+                <input type="time" class="input-limpo input-time-dia" style="display: none; padding: 0.3rem 0.6rem; max-width: 120px; text-align: center;">
+            </div>
+            
+            <div class="dia-horario-row" style="display: flex; align-items: center; justify-content: space-between;">
+                <label class="checkbox-label"><input type="checkbox" class="chk-dia" value="Terça-feira"> Terça-feira</label>
+                <input type="time" class="input-limpo input-time-dia" style="display: none; padding: 0.3rem 0.6rem; max-width: 120px; text-align: center;">
+            </div>
+            
+            <div class="dia-horario-row" style="display: flex; align-items: center; justify-content: space-between;">
+                <label class="checkbox-label"><input type="checkbox" class="chk-dia" value="Quarta-feira"> Quarta-feira</label>
+                <input type="time" class="input-limpo input-time-dia" style="display: none; padding: 0.3rem 0.6rem; max-width: 120px; text-align: center;">
+            </div>
+            
+            <div class="dia-horario-row" style="display: flex; align-items: center; justify-content: space-between;">
+                <label class="checkbox-label"><input type="checkbox" class="chk-dia" value="Quinta-feira"> Quinta-feira</label>
+                <input type="time" class="input-limpo input-time-dia" style="display: none; padding: 0.3rem 0.6rem; max-width: 120px; text-align: center;">
+            </div>
+            
+            <div class="dia-horario-row" style="display: flex; align-items: center; justify-content: space-between;">
+                <label class="checkbox-label"><input type="checkbox" class="chk-dia" value="Sexta-feira"> Sexta-feira</label>
+                <input type="time" class="input-limpo input-time-dia" style="display: none; padding: 0.3rem 0.6rem; max-width: 120px; text-align: center;">
+            </div>
+            
+            <div class="dia-horario-row" style="display: flex; align-items: center; justify-content: space-between;">
+                <label class="checkbox-label"><input type="checkbox" class="chk-dia" value="Sábado"> Sábado</label>
+                <input type="time" class="input-limpo input-time-dia" style="display: none; padding: 0.3rem 0.6rem; max-width: 120px; text-align: center;">
+            </div>
+            
+            <div class="dia-horario-row" style="display: flex; align-items: center; justify-content: space-between;">
+                <label class="checkbox-label"><input type="checkbox" class="chk-dia" value="Domingo"> Domingo</label>
+                <input type="time" class="input-limpo input-time-dia" style="display: none; padding: 0.3rem 0.6rem; max-width: 120px; text-align: center;">
+            </div>
+            
+        </div>
+
+        <div style="text-align: right; margin-top: 2rem; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">Selecione os dias e insira a hora</span>
+            <button type="button" id="btnFecharModalDias" class="btn-custom btn-salvar" style="padding: 0.6rem 2rem; font-size: 0.9rem; width: auto;">Confirmar Horários</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function formatarMoeda(elemento) {
+        let valor = elemento.value.replace(/\D/g, "");
+        if (valor === "") {
+            elemento.value = "";
+            return;
+        }
+        valor = (parseInt(valor) / 100).toFixed(2) + "";
+        valor = valor.replace(".", ",");
+        valor = valor.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
+        elemento.value = "R$ " + valor;
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        const form = document.getElementById("formMatricula");
+        const inputsValidaveis = form.querySelectorAll(".campo-validavel");
+        const btnSalvar = document.getElementById("btnSalvar");
+        
+        const inputBusca = document.getElementById("busca_aluno");
+        const spanErroBusca = document.querySelector('[id-erro="busca_aluno"]');
+        const areaDados = document.getElementById("area_dados_matricula");
+        const imgFoto = document.getElementById("foto_aluno");
+        const fotoPlaceholder = document.getElementById("foto_placeholder");
+        
+        const modalModalidades = document.getElementById("modalModalidades");
+        const btnAbrirModal = document.getElementById("btnAbrirModalModalidades");
+        const btnFecharModal = document.getElementById("btnFecharModalModalidades");
+        const chksModalidade = document.querySelectorAll(".chk-modalidade");
+        const containerGrade = document.getElementById("containerGrade");
+        
+        const modalDiasHorarios = document.getElementById("modalDiasHorarios");
+        const btnFecharModalDias = document.getElementById("btnFecharModalDias");
+        const btnFecharModalDiasX = document.getElementById("btnFecharModalDiasX");
+
+        // === IDENTIFICAÇÃO DINÂMICA: CPF VS MATRÍCULA ===
+        inputBusca.addEventListener("input", function(e) {
+            if (typeof aplicarMascaraCPFOuMatricula === 'function') {
+                aplicarMascaraCPFOuMatricula(this);
+            }
+            
+            let valor = this.value.replace(/\D/g, ""); 
+            
+            if (valor === "") {
+                spanErroBusca.style.display = "none";
+                areaDados.disabled = true;
+                imgFoto.src = "";
+                imgFoto.style.display = "none";
+                fotoPlaceholder.style.display = "block";
+                document.getElementById('aluno_id').value = "";
+                document.getElementById('matricula_id').value = "";
+                document.getElementById('nome_completo').value = "";
+                inputBusca.style.color = "#FFFFFF";
+                
+                document.getElementById('tipo_plano').value = "";
+                document.getElementById('data_inicio').value = "";
+                document.getElementById('data_fim').value = "";
+                document.getElementById('dia_vencimento').value = "";
+                document.getElementById('taxa_matricula').value = "";
+                chksModalidade.forEach(chk => chk.checked = false);
+                containerGrade.innerHTML = "";
+                
+                validarFormulario();
+            }
+        });
+
+        // === EVENTOS: MODAL DE MODALIDADES ===
+        btnAbrirModal.addEventListener("click", () => modalModalidades.style.display = "flex");
+        btnFecharModal.addEventListener("click", () => {
+            modalModalidades.style.display = "none";
+            gerarGradeDinamica();
+        });
+
+        function gerarGradeDinamica() {
+            let index = 0;
+
+            chksModalidade.forEach(chk => {
+                const modalidade = chk.value;
+                let divLinha = document.getElementById(`linha-grade-${index}`);
+
+                if (chk.checked) {
+                    if (!divLinha) {
+                        divLinha = document.createElement("div");
+                        divLinha.className = "linha-grade";
+                        divLinha.id = `linha-grade-${index}`;
+                        
+                        divLinha.innerHTML = `
+                            <div class="modalidade-titulo" style="min-width: 200px;">
+                                ${modalidade}
+                            </div>
+                            <div style="flex: 1; display: flex; flex-direction: column; gap: 0.5rem;">
+                                <div style="display: flex; align-items: center; gap: 1rem;">
+                                    <button type="button" class="btn-custom btn-cancelar" style="padding: 0.4rem 1rem; font-size: 0.8rem; width: auto;" onclick="abrirModalDias(${index}, '${modalidade}')">
+                                        <i class="fas fa-clock" style="margin-right: 5px;"></i> Definir Dias e Horários
+                                    </button>
+                                    <span class="resumo-horarios" style="font-size: 0.85rem; color: rgba(255, 255, 255, 0.4); font-style: italic;">Nenhum horário definido. Clique no botão ao lado.</span>
+                                </div>
+                                <div class="hiddens-container"></div>
+                            </div>
+                        `;
+                        containerGrade.appendChild(divLinha);
+                    }
+                } else {
+                    if (divLinha) {
+                        divLinha.remove();
+                    }
+                }
+                index++;
+            });
+
+            validarFormulario();
+        }
+
+        // === EVENTOS: MODAL DE DIAS E HORÁRIOS ===
+        window.abrirModalDias = function(index, modalidade) {
+            document.getElementById('modalidadeAtualIndex').value = index;
+            document.getElementById('tituloModalDias').textContent = modalidade;
+            
+            document.querySelectorAll('.chk-dia').forEach(chk => {
+                chk.checked = false;
+                const timeInput = chk.closest('.dia-horario-row').querySelector('.input-time-dia');
+                timeInput.style.display = 'none';
+                timeInput.value = '';
+                timeInput.style.borderColor = 'rgba(255, 255, 255, 0.2)'; 
+            });
+
+            const row = document.getElementById(`linha-grade-${index}`);
+            if (row) {
+                const inputsDias = row.querySelectorAll('input[name="grade_dias[]"]');
+                const inputsHorarios = row.querySelectorAll('input[name="grade_horario[]"]');
+
+                for(let i = 0; i < inputsDias.length; i++) {
+                    const chk = document.querySelector(`.chk-dia[value="${inputsDias[i].value}"]`);
+                    if(chk) {
+                        chk.checked = true;
+                        const timeInput = chk.closest('.dia-horario-row').querySelector('.input-time-dia');
+                        timeInput.style.display = 'block';
+                        timeInput.value = inputsHorarios[i].value;
+                    }
+                }
+            }
+
+            modalDiasHorarios.style.display = "flex";
+        };
+
+        document.querySelectorAll('.chk-dia').forEach(chk => {
+            chk.addEventListener('change', function() {
+                const timeInput = this.closest('.dia-horario-row').querySelector('.input-time-dia');
+                if (this.checked) {
+                    timeInput.style.display = 'block';
+                    timeInput.focus();
+                } else {
+                    timeInput.style.display = 'none';
+                    timeInput.value = '';
+                    timeInput.style.borderColor = 'rgba(255, 255, 255, 0.2)'; 
+                }
+            });
+        });
+
+        // --- NOVO: FECHAR MODAL DE HORÁRIOS (BOTÃO X) ---
+        btnFecharModalDiasX.addEventListener("click", () => {
+            document.getElementById("modalDiasHorarios").style.display = "none";
+        });
+
+        // --- NOVO: FUNÇÃO ASSÍNCRONA PARA CONFIRMAR E VALIDAR HORÁRIOS ---
+        btnFecharModalDias.addEventListener("click", async () => {
+            const index = document.getElementById('modalidadeAtualIndex').value;
+            const row = document.getElementById(`linha-grade-${index}`);
+            const modalidade = row.querySelector('.modalidade-titulo').textContent.trim();
+            
+            let temErroFaltaHorario = false;
+            const horariosSelecionados = [];
+
+            document.querySelectorAll('.chk-dia').forEach(chk => {
+                if (chk.checked) {
+                    const timeInput = chk.closest('.dia-horario-row').querySelector('.input-time-dia');
+                    const timeValue = timeInput.value;
+                    
+                    if (!timeValue) {
+                        temErroFaltaHorario = true; 
+                        timeInput.style.borderColor = '#ff6b6b'; 
+                    } else {
+                        timeInput.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+                        horariosSelecionados.push({ dia: chk.value, horario: timeValue });
+                    }
+                }
+            });
+
+            if (temErroFaltaHorario) {
+                alert("Atenção: Preencha o horário para todos os dias selecionados ou desmarque-os.");
+                return;
+            }
+
+            // --- 1. Trava de Choque Front-end (Modalidades que estão na tela) ---
+            const horariosExistentesTela = [];
+            document.querySelectorAll('.linha-grade').forEach(linha => {
+                if (linha.id !== `linha-grade-${index}`) {
+                    const diasLinha = linha.querySelectorAll('input[name="grade_dias[]"]');
+                    const horasLinha = linha.querySelectorAll('input[name="grade_horario[]"]');
+                    const modLinha = linha.querySelector('.modalidade-titulo').textContent.trim();
+                    for(let i=0; i < diasLinha.length; i++) {
+                        horariosExistentesTela.push(`${diasLinha[i].value}|${horasLinha[i].value}|${modLinha}`);
+                    }
+                }
+            });
+
+            let conflitoTela = null;
+            for (const item of horariosSelecionados) {
+                const parValidacao = `${item.dia}|${item.horario}`;
+                const match = horariosExistentesTela.find(h => h.startsWith(parValidacao));
+                if (match) {
+                    conflitoTela = match.split('|')[2];
+                    break;
+                }
+            }
+
+            if (conflitoTela) {
+                alert(`Conflito de Horário: O aluno já possui uma atividade em tela (${conflitoTela}) agendada para o mesmo dia e horário.`);
+                return;
+            }
+
+            // --- 2. Trava de Choque Back-end (Consulta Assíncrona no Banco de Dados) ---
+            const alunoId = document.getElementById('aluno_id').value;
+            if (alunoId && horariosSelecionados.length > 0) {
+                try {
+                    const btn = document.getElementById('btnFecharModalDias');
+                    const textoOriginal = btn.textContent;
+                    btn.textContent = "Validando...";
+                    btn.disabled = true;
+
+                    const response = await fetch('/api/matriculas/validar_horario', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            aluno_id: alunoId,
+                            modalidade_atual: modalidade,
+                            horarios: horariosSelecionados
+                        })
+                    });
+                    
+                    btn.textContent = textoOriginal;
+                    btn.disabled = false;
+
+                    const data = await response.json();
+                    if (data.conflito) {
+                        alert(`Conflito no Banco de Dados:\n${data.mensagem}`);
+                        return; // Impede o fechamento do modal e mantém Efetivar Matrícula bloqueado
+                    }
+                } catch (error) {
+                    console.error("Erro ao validar no backend:", error);
+                    alert("Erro ao validar o horário no servidor. Tente novamente.");
+                    document.getElementById('btnFecharModalDias').disabled = false;
+                    document.getElementById('btnFecharModalDias').textContent = "Confirmar Horários";
+                    return;
+                }
+            }
+
+            // --- 3. Gravação Visual se tudo passou nas validações ---
+            const containerHiddens = row.querySelector('.hiddens-container');
+            const spanResumo = row.querySelector('.resumo-horarios');
+            
+            containerHiddens.innerHTML = '';
+            let resumos = [];
+
+            horariosSelecionados.forEach(item => {
+                const nomeCurto = item.dia.split('-')[0].substring(0, 3);
+                resumos.push(`${nomeCurto} às ${item.horario}`);
+                
+                containerHiddens.innerHTML += `
+                    <input type="hidden" name="grade_modalidade[]" value="${modalidade}">
+                    <input type="hidden" name="grade_dias[]" value="${item.dia}">
+                    <input type="hidden" name="grade_horario[]" value="${item.horario}">
+                `;
+            });
+
+            if (resumos.length > 0) {
+                spanResumo.textContent = resumos.join(' | ');
+                spanResumo.style.color = '#80D5C9';
+                spanResumo.style.fontWeight = '600';
+                spanResumo.style.fontStyle = 'normal';
+            } else {
+                spanResumo.textContent = 'Nenhum horário definido. Clique no botão ao lado.';
+                spanResumo.style.color = 'rgba(255, 255, 255, 0.4)';
+                spanResumo.style.fontWeight = 'normal';
+                spanResumo.style.fontStyle = 'italic';
+            }
+
+            document.getElementById("modalDiasHorarios").style.display = "none";
+            validarFormulario();
+        });
+
+        // === BUSCA DO ALUNO ===
+        inputBusca.addEventListener("blur", function(e) {
+            // --- NOVO: Adiciona zeros à esquerda na matrícula ---
+            if (typeof formatarMatriculaBlur === 'function') {
+                formatarMatriculaBlur(this);
+            }
+            
+            const termoDigitado = this.value.trim();
+            if (termoDigitado === "") return;
+
+            fetch(`/api/alunos/buscar?termo=${encodeURIComponent(termoDigitado)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.encontrado) {
+                        spanErroBusca.style.display = "none";
+                        areaDados.disabled = false;
+                        
+                        let alunoData = data.dados;
+                        if (data.multiplos) {
+                            alunoData = data.alunos[0]; 
+                            alert("Foram encontrados múltiplos alunos (irmãos). Refine a busca pela Matrícula específica.");
+                        }
+
+                        document.getElementById('aluno_id').value = alunoData.id;
+                        document.getElementById('nome_completo').value = alunoData.nome_completo;
+                        inputBusca.style.color = "#80D5C9";
+
+                        if (alunoData.foto_url) {
+                            imgFoto.src = alunoData.foto_url;
+                            imgFoto.style.display = "block";
+                            fotoPlaceholder.style.display = "none";
+                        } else {
+                            imgFoto.src = "";
+                            imgFoto.style.display = "none";
+                            fotoPlaceholder.style.display = "block";
+                        }
+                        
+                        // === Integração do Histórico da Matrícula ===
+                        if (alunoData.matricula) {
+                            document.getElementById('matricula_id').value = alunoData.matricula.id;
+                            document.getElementById('tipo_plano').value = alunoData.matricula.tipo_plano || "";
+                            document.getElementById('data_inicio').value = alunoData.matricula.data_inicio || "";
+                            document.getElementById('data_fim').value = alunoData.matricula.data_fim || "";
+                            document.getElementById('dia_vencimento').value = alunoData.matricula.dia_vencimento || "";
+                            
+                            const taxaInput = document.getElementById('taxa_matricula');
+                            taxaInput.value = alunoData.matricula.taxa_matricula || "";
+                            if (taxaInput.value) formatarMoeda(taxaInput);
+                            
+                            chksModalidade.forEach(chk => chk.checked = false);
+                            containerGrade.innerHTML = "";
+                            
+                            if (alunoData.matricula.grade && alunoData.matricula.grade.length > 0) {
+                                alunoData.matricula.grade.forEach(item => {
+                                    const chk = document.querySelector(`.chk-modalidade[value="${item.modalidade}"]`);
+                                    if (chk) chk.checked = true;
+                                });
+                                
+                                gerarGradeDinamica();
+                                
+                                const mapModalidades = {};
+                                alunoData.matricula.grade.forEach(item => {
+                                    if (!mapModalidades[item.modalidade]) mapModalidades[item.modalidade] = [];
+                                    mapModalidades[item.modalidade].push(item);
+                                });
+                                
+                                document.querySelectorAll('.linha-grade').forEach(linha => {
+                                    const modNome = linha.querySelector('.modalidade-titulo').textContent.trim();
+                                    if (mapModalidades[modNome]) {
+                                        const containerHiddens = linha.querySelector('.hiddens-container');
+                                        const spanResumo = linha.querySelector('.resumo-horarios');
+                                        let resumosVisuais = [];
+                                        let hiddensHTML = '';
+                                        
+                                        mapModalidades[modNome].forEach(item => {
+                                            const nomeCurto = item.dias_semana.split('-')[0].substring(0, 3);
+                                            resumosVisuais.push(`${nomeCurto} às ${item.horario}`);
+                                            
+                                            hiddensHTML += `
+                                                <input type="hidden" name="grade_modalidade[]" value="${modNome}">
+                                                <input type="hidden" name="grade_dias[]" value="${item.dias_semana}">
+                                                <input type="hidden" name="grade_horario[]" value="${item.horario}">
+                                            `;
+                                        });
+                                        
+                                        containerHiddens.innerHTML = hiddensHTML;
+                                        spanResumo.textContent = resumosVisuais.join(' | ');
+                                        spanResumo.style.color = '#80D5C9';
+                                        spanResumo.style.fontWeight = '600';
+                                        spanResumo.style.fontStyle = 'normal';
+                                    }
+                                });
+                            }
+                        } else {
+                            document.getElementById('matricula_id').value = "";
+                            document.getElementById('tipo_plano').value = "";
+                            document.getElementById('data_inicio').value = "";
+                            document.getElementById('data_fim').value = "";
+                            document.getElementById('dia_vencimento').value = "";
+                            document.getElementById('taxa_matricula').value = "";
+                            chksModalidade.forEach(chk => chk.checked = false);
+                            containerGrade.innerHTML = "";
+                        }
+                        
+                        validarFormulario();
+                    } else {
+                        spanErroBusca.textContent = data.msg || "Aluno não encontrado.";
+                        spanErroBusca.style.display = "block";
+                        inputBusca.style.color = "#ff6b6b";
+                        areaDados.disabled = true;
+                    }
+                })
+                .catch(error => {
+                    console.error("Erro na API:", error);
+                    spanErroBusca.textContent = "Erro de conexão.";
+                    spanErroBusca.style.display = "block";
+                });
+        });
+
+        // === NAVEGAÇÃO GLOBAL COM A TECLA ENTER ===
+        form.addEventListener("keydown", function(e) {
+            if (e.key === "Enter") {
+                const target = e.target;
+                if (target.tagName.toLowerCase() === 'button') return;
+                e.preventDefault(); 
+                
+                if (target.id === 'busca_aluno') {
+                    target.blur(); 
+                    return;
+                }
+
+                const focusableElements = Array.from(form.querySelectorAll(
+                    'input:not([type="hidden"]):not([disabled]):not([readonly]), select:not([disabled]):not([readonly]), button:not([disabled])'
+                ));
+                const index = focusableElements.indexOf(target);
+                if (index > -1 && index < focusableElements.length - 1) {
+                    focusableElements[index + 1].focus();
+                }
+            }
+        });
+
+        // === VALIDAÇÃO DINÂMICA DA MATRÍCULA ===
+        function validarFormulario() {
+            let formularioValido = true;
+            const camposParaValidar = form.querySelectorAll(".campo-validavel");
+            
+            camposParaValidar.forEach(input => {
+                if (input.value.trim() === "") {
+                    formularioValido = false;
+                }
+            });
+
+            if (containerGrade.children.length === 0) {
+                formularioValido = false;
+            } else {
+                const linhas = containerGrade.querySelectorAll('.linha-grade');
+                linhas.forEach(linha => {
+                    if(linha.querySelectorAll('input[name="grade_horario[]"]').length === 0) {
+                        formularioValido = false;
+                    }
+                });
+            }
+
+            btnSalvar.disabled = !formularioValido;
+        }
+
+        const camposParaValidarEventos = form.querySelectorAll(".campo-validavel");
+        camposParaValidarEventos.forEach(input => {
+            input.addEventListener("input", validarFormulario);
+            input.addEventListener("change", validarFormulario);
+        });
+
+        form.addEventListener("submit", function(e) {
+            if (btnSalvar.disabled) {
+                e.preventDefault();
+            } else {
+                const tx = document.getElementById("taxa_matricula");
+                if(tx.value) {
+                    let valor = tx.value.replace("R$ ", "").replace(/\./g, "").replace(",", ".");
+                    tx.value = valor;
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

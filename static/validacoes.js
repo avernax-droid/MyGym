@@ -10,6 +10,8 @@
 // 05/08/26: Criação do arquivo e migração das funções globais do cadastro.
 // 07/08/26: Inclusão das funções de máscara de CEP e busca de endereço via API (ViaCEP).
 // 12/08/26: Adição do comportamento Enter como Tab e Preview de Imagem de Upload.
+// 14/08/26: Inclusão da função aplicarMascaraCPFOuMatricula para busca dinâmica de alunos.
+// 14/08/26: Inclusão da função formatarMatriculaBlur para preenchimento de zeros à esquerda (ex: 0001).
 // ==============================================================================
 
 // --- FUNÇÕES DE MÁSCARA E LIMPEZA ---
@@ -42,6 +44,33 @@ function aplicarMascaraCPF(input) {
         valor = `${valor.slice(0, 3)}.${valor.slice(3)}`;
     }
     input.value = valor;
+}
+
+function aplicarMascaraCPFOuMatricula(input) {
+    let valor = input.value.replace(/\D/g, "");
+    if (valor.length === 0) {
+        input.value = "";
+        return;
+    }
+    if (valor.length > 11) valor = valor.slice(0, 11);
+    
+    if (valor.length > 6) {
+        if (valor.length > 9) {
+            valor = `${valor.slice(0, 3)}.${valor.slice(3, 6)}.${valor.slice(6, 9)}-${valor.slice(9)}`;
+        } else {
+            valor = `${valor.slice(0, 3)}.${valor.slice(3, 6)}.${valor.slice(6)}`;
+        }
+    }
+    
+    input.value = valor;
+}
+
+function formatarMatriculaBlur(input) {
+    let valor = input.value.replace(/\D/g, "");
+    // Se for uma matrícula (até 6 dígitos), preenche com zeros à esquerda até ter no mínimo 4 dígitos
+    if (valor.length > 0 && valor.length <= 6) {
+        input.value = valor.padStart(4, '0');
+    }
 }
 
 function removerMascara(input) {

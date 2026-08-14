@@ -18,6 +18,7 @@ HISTÓRICO DE ALTERAÇÕES:
 04/08/26: Centralização absoluta da navegação (incluindo links desabilitados offline) no base.html.
 04/08/26: Simplificação da barra de navegação: remoção de "Início"/"Sair" e reestruturação do Backoffice.
 04/08/26: Remoção de marcadores temporários '(*)' dos submenus do Backoffice.
+13/08/26: Atualização da rota do menu Matrícula para /backoffice/matriculas/nova.
 ============================================================================== 
 #}
 
@@ -310,7 +311,7 @@ HISTÓRICO DE ALTERAÇÕES:
                     {% endif %}
                     
                     {% if is_free or p.get('mod_matricula') %}
-                    <a href="#">Matrícula</a>
+                    <a href="/backoffice/matriculas/nova">Matrícula</a>
                     {% endif %}
                 </div>
             </div>

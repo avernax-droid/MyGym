@@ -1,0 +1,62 @@
+{# ==============================================================================
+ PROJETO: MyGym
+ MÓDULO: componentes/modal_modalidades.html
+ DATA DE CRIAÇÃO: 13/08/26
+ TÍTULO: Componente Modal de Modalidades
+ FUNÇÃO: Centralizar a interface de seleção de modalidades (Ginástica/Piscina) para 
+         reuso em diferentes módulos do sistema (Professor, Matrícula, etc).
+         
+ HISTÓRICO DE ALTERAÇÕES:
+ 14/08/26: Alteração do título do modal e inclusão de botão superior ("X") para fechamento.
+============================================================================== #}
+<!-- POPUP (MODAL) DE SELEÇÃO DE MODALIDADES -->
+<div id="modalModalidades" class="modal-modalidades">
+    <div class="modal-modalidades-content" style="position: relative;">
+        <button type="button" 
+                onclick="document.getElementById('modalModalidades').style.display='none'"
+                style="position: absolute; top: 1.5rem; right: 1.5rem; background: transparent; border: none; color: #FFFFFF; font-size: 1.8rem; cursor: pointer; opacity: 0.6; transition: opacity 0.3s ease; line-height: 1; padding: 0;" 
+                onmouseover="this.style.opacity='1'" 
+                onmouseout="this.style.opacity='0.6'" 
+                title="Fechar">&times;</button>
+                
+        <h3 style="margin-top: 0; margin-bottom: 1.5rem; font-size: 1.3rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem; padding-right: 2rem;">Selecione a atividade</h3>
+        
+        <div style="display: flex; gap: 1.5rem;">
+            <div style="flex: 1;">
+                <label style="color: #80D5C9; margin-bottom: 0.8rem; font-weight: 600; font-size: 0.85rem;">GINÁSTICA / SALA</label>
+                <div class="checkbox-grid">
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Musculação"> Musculação</label>
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Treinamento Funcional"> Treinamento Funcional</label>
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="HIIT"> HIIT</label>
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Spinning"> Spinning</label>
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Jump"> Jump</label>
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Fitdance / Zumba"> Fitdance / Zumba</label>
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Body Pump / Localizada / GAP"> Body Pump / Localizada / GAP</label>
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Step"> Step</label>
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Yoga"> Yoga</label>
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Pilates"> Pilates</label>
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Lutas Fitness"> Lutas Fitness</label>
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Cross Training"> Cross Training</label>
+                </div>
+            </div>
+            <div style="flex: 1;">
+                <label style="color: #80D5C9; margin-bottom: 0.8rem; font-weight: 600; font-size: 0.85rem;">PISCINA</label>
+                <div class="checkbox-grid">
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Natação Bebê"> Natação Bebê</label>
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Natação Infantil"> Natação Infantil</label>
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Natação Adulto"> Natação Adulto</label>
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Natação Competição"> Natação Competição</label>
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Hidroginástica"> Hidroginástica</label>
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Hidroterapia"> Hidroterapia</label>
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Hidrobike"> Hidrobike</label>
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Hidro Jump"> Hidro Jump</label>
+                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Deep Running"> Deep Running</label>
+                </div>
+            </div>
+        </div>
+
+        <div style="text-align: right; margin-top: 2rem;">
+            <button type="button" id="btnFecharModalModalidades" class="btn-custom btn-salvar" style="padding: 0.6rem 2rem; font-size: 0.9rem;">Concluir</button>
+        </div>
+    </div>
+</div>

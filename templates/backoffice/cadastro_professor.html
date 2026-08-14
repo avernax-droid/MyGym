@@ -24,6 +24,7 @@
  08/08/26: Ajuste para aplicar a cor diretamente no texto do CPF e exibição de miniaturas visuais para certificados de imagem ou links para PDF.
  10/08/26: Refatoração da área de exibição de certificados para suportar múltiplos arquivos em container flex (galeria), com exibição aprimorada de nome original em PDFs.
  10/08/26: Correção na aplicação da máscara visual do campo Telefone principal herdado do RH.
+ 13/08/26: Refatoração estrutural (DRY): Extração do popup de modalidades para um componente centralizado (modal_modalidades.html).
 ============================================================================== #}
 
 {% extends "base.html" %}
@@ -193,7 +194,7 @@
         color: rgba(255, 255, 255, 0.9);
     }
     
-    /* Estilos do Modal de Modalidades */
+    /* Estilos do Modal de Modalidades (Mantidos para o componente injetado) */
     .modal-modalidades {
         display: none;
         position: fixed;
@@ -369,50 +370,8 @@
     </form>
 </div>
 
-<!-- POPUP (MODAL) DE SELEÇÃO DE MODALIDADES -->
-<div id="modalModalidades" class="modal-modalidades">
-    <div class="modal-modalidades-content">
-        <h3 style="margin-top: 0; margin-bottom: 1.5rem; font-size: 1.3rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem;">Seleção de Modalidades de Ensino</h3>
-        
-        <div style="display: flex; gap: 1.5rem;">
-            <div style="flex: 1;">
-                <label style="color: #80D5C9; margin-bottom: 0.8rem; font-weight: 600; font-size: 0.85rem;">GINÁSTICA / SALA</label>
-                <div class="checkbox-grid">
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Musculação"> Musculação</label>
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Treinamento Funcional"> Treinamento Funcional</label>
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="HIIT"> HIIT</label>
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Spinning"> Spinning</label>
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Jump"> Jump</label>
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Fitdance / Zumba"> Fitdance / Zumba</label>
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Body Pump / Localizada / GAP"> Body Pump / Localizada / GAP</label>
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Step"> Step</label>
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Yoga"> Yoga</label>
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Pilates"> Pilates</label>
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Lutas Fitness"> Lutas Fitness</label>
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Cross Training"> Cross Training</label>
-                </div>
-            </div>
-            <div style="flex: 1;">
-                <label style="color: #80D5C9; margin-bottom: 0.8rem; font-weight: 600; font-size: 0.85rem;">PISCINA</label>
-                <div class="checkbox-grid">
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Natação Bebê"> Natação Bebê</label>
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Natação Infantil"> Natação Infantil</label>
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Natação Adulto"> Natação Adulto</label>
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Natação Competição"> Natação Competição</label>
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Hidroginástica"> Hidroginástica</label>
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Hidroterapia"> Hidroterapia</label>
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Hidrobike"> Hidrobike</label>
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Hidro Jump"> Hidro Jump</label>
-                    <label class="checkbox-label"><input type="checkbox" class="chk-modalidade" value="Deep Running"> Deep Running</label>
-                </div>
-            </div>
-        </div>
-
-        <div style="text-align: right; margin-top: 2rem;">
-            <button type="button" id="btnFecharModalModalidades" class="btn-custom btn-salvar" style="padding: 0.6rem 2rem; font-size: 0.9rem;">Concluir</button>
-        </div>
-    </div>
-</div>
+<!-- INCLUSÃO DO COMPONENTE DE MODALIDADES -->
+{% include 'componentes/modal_modalidades.html' %}
 
 <script>
     document.addEventListener("DOMContentLoaded", function() {
