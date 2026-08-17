@@ -47,6 +47,7 @@
 # 14/08/26: Correção no parsing da taxa de matrícula para evitar inflação decimal em conflito com o Front-end.
 # 14/08/26: Implementação de lógica UPDATE na rota de salvar matrícula e suporte ao campo oculto matricula_id.
 # 14/08/26: Correção de parsing e formatação de horas (TIME) para evitar erro 1292 no MySQL ao atualizar grade de matrículas.
+# 17/08/26: Inclusão de disparo de e-mail transacional de confirmação na rota de salvamento de matrículas (correção da query de e-mail do aluno).
 # ==============================================================================
 
 import os
@@ -62,6 +63,7 @@ import random
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from datetime import datetime
 
 # Importa a função de conexão com o banco
 from database.connection import get_connection
@@ -73,6 +75,34 @@ app = Flask(__name__)
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.secret_key = os.getenv('SECRET_KEY', 'chave_padrao_fallback')
 
+def enviar_email_html(destinatario, assunto, corpo_html):
+    smtp_host = os.getenv('EMAIL_HOST')
+    smtp_port = int(os.getenv('EMAIL_PORT', 587))
+    smtp_user = os.getenv('EMAIL_USER')
+    smtp_pass = os.getenv('EMAIL_PASS')
+    
+    if not smtp_host or not smtp_user or not smtp_pass:
+        print("Erro: Credenciais de e-mail (SMTP) ausentes no .env.")
+        return False
+        
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['From'] = f"MyGym <{smtp_user}>"
+        msg['To'] = destinatario
+        msg['Subject'] = assunto
+        
+        msg.attach(MIMEText(corpo_html, 'html'))
+        
+        server = smtplib.SMTP(smtp_host, smtp_port)
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"Erro ao tentar enviar o e-mail: {e}")
+        return False
+    
 def is_mobile(req):
     sec_mobile = req.headers.get('Sec-Ch-Ua-Mobile')
     if sec_mobile == '?1':
@@ -1214,6 +1244,8 @@ def salvar_matricula():
             dias = request.form.getlist('grade_dias[]')
             horarios = request.form.getlist('grade_horario[]')
             
+            lista_grade_email = []
+            
             for i in range(len(modalidades)):
                 mod = modalidades[i]
                 dia = dias[i] if i < len(dias) else ''
@@ -1230,9 +1262,57 @@ def salvar_matricula():
                         VALUES (%s, %s, %s, %s)
                     """
                     cursor.execute(sql_grade, (matricula_id, mod, dia, horario))
+                    lista_grade_email.append({'modalidade': mod, 'dias_semana': dia, 'horario': horario})
                     
             conn.commit()
             print(f"Matrícula {matricula_id} e grade salvas com sucesso para o Aluno {aluno_id}.")
+            
+            # ==============================================================================
+            # ROTINA DE DISPARO DE E-MAIL TRANSACIONAL
+            # ==============================================================================
+            try:
+                # Busca os dados do aluno para envio (ajustado para consultar diretamente a tabela alunos)
+                sql_aluno_email = """
+                    SELECT a.nome_completo, a.email
+                    FROM alunos a
+                    WHERE a.id = %s LIMIT 1
+                """
+                cursor.execute(sql_aluno_email, (aluno_id,))
+                aluno_row = cursor.fetchone()
+                
+                if aluno_row:
+                    nome_aluno = aluno_row[0]
+                    email_destino = aluno_row[1]
+                    
+                    if email_destino:
+                        # Formata a data de YYYY-MM-DD para DD/MM/YYYY para exibição
+                        try:
+                            data_inicio_formatada = datetime.strptime(data_inicio, '%Y-%m-%d').strftime('%d/%m/%Y')
+                        except:
+                            data_inicio_formatada = data_inicio
+                            
+                        # Renderiza o template HTML do e-mail com os dados
+                        html_corpo = render_template(
+                            'emails/matricula_confirmada.html',
+                            nome_aluno=nome_aluno,
+                            tipo_plano=tipo_plano,
+                            data_inicio=data_inicio_formatada,
+                            grade=lista_grade_email
+                        )
+                        
+                        # Dispara o e-mail de forma silenciosa
+                        enviou = enviar_email_html(
+                            destinatario=email_destino,
+                            assunto="Sua Matrícula no MyGym foi confirmada! 🏊‍♂️",
+                            corpo_html=html_corpo
+                        )
+                        if enviou:
+                            print(f"E-mail de confirmação enviado para {email_destino}")
+                    else:
+                        print("E-mail não enviado: O aluno não possui endereço de e-mail cadastrado.")
+            except Exception as e_email:
+                print(f"Erro na rotina de envio de e-mail: {e_email}")
+                
         except Exception as e:
             print(f"Erro ao salvar matrícula no banco: {e}")
             conn.rollback()

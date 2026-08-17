@@ -1,0 +1,96 @@
+{# ==============================================================================
+ PROJETO: MyGym
+ MÓDULO: templates/emails/matricula_confirmada.html
+ DATA DE CRIAÇÃO: 17/08/26
+ TÍTULO: E-mail de Confirmação de Matrícula
+ FUNÇÃO: Template visual (HTML) enviado ao aluno informando o sucesso da 
+         matrícula, dados do plano e a grade de horários cadastrada.
+         
+ HISTÓRICO DE ALTERAÇÕES:
+ 17/08/26: Criação inicial do template alinhado com o Design System.
+============================================================================== #}
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Confirmação de Matrícula - MyGym</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f4f8fa; font-family: 'Arial', sans-serif;">
+    
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #f4f8fa; padding: 20px 0;">
+        <tr>
+            <td align="center">
+                <!-- Container Principal -->
+                <table width="600" cellpadding="0" cellspacing="0" border="0" style="background-color: #002B49; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+                    
+                    <!-- Cabeçalho -->
+                    <tr>
+                        <td align="center" style="padding: 40px 0 20px 0; background: linear-gradient(to bottom, #002B49, #003d66);">
+                            <h1 style="color: #80D5C9; margin: 0; font-size: 28px; font-style: italic; font-weight: 800; letter-spacing: 1px;">MyGym</h1>
+                            <p style="color: #FFFFFF; margin: 5px 0 0 0; font-size: 16px; opacity: 0.9;">Atividades Aquáticas & Fitness</p>
+                        </td>
+                    </tr>
+
+                    <!-- Corpo do E-mail -->
+                    <tr>
+                        <td style="padding: 30px 40px;">
+                            <h2 style="color: #FFFFFF; font-size: 22px; margin-bottom: 20px;">Olá, {{ nome_aluno }}! 🏊‍♂️</h2>
+                            <p style="color: rgba(255, 255, 255, 0.85); font-size: 16px; line-height: 1.6; margin-bottom: 25px;">
+                                É com muita alegria que confirmamos a sua matrícula. Tudo já está configurado no nosso sistema e estamos prontos para acompanhar sua evolução!
+                            </p>
+
+                            <!-- Caixa de Resumo do Plano -->
+                            <div style="background-color: rgba(255, 255, 255, 0.05); border: 1px solid rgba(128, 213, 201, 0.3); border-radius: 6px; padding: 20px; margin-bottom: 30px;">
+                                <h3 style="color: #80D5C9; margin-top: 0; margin-bottom: 15px; font-size: 18px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 10px;">Resumo do seu Plano</h3>
+                                
+                                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                                    <tr>
+                                        <td width="50%" style="padding-bottom: 10px;">
+                                            <span style="color: rgba(255, 255, 255, 0.6); font-size: 14px; display: block;">Plano Escolhido</span>
+                                            <strong style="color: #FFFFFF; font-size: 16px;">{{ tipo_plano }}</strong>
+                                        </td>
+                                        <td width="50%" style="padding-bottom: 10px;">
+                                            <span style="color: rgba(255, 255, 255, 0.6); font-size: 14px; display: block;">Data de Início</span>
+                                            <strong style="color: #FFFFFF; font-size: 16px;">{{ data_inicio }}</strong>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </div>
+
+                            <!-- Grade de Horários -->
+                            <h3 style="color: #FFFFFF; font-size: 18px; margin-bottom: 15px;">Sua Grade de Horários</h3>
+                            
+                            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse; margin-bottom: 30px;">
+                                {% for item in grade %}
+                                <tr>
+                                    <td style="padding: 12px 15px; border-bottom: 1px dashed rgba(255,255,255,0.1); border-left: 3px solid #80D5C9; background-color: rgba(255,255,255,0.02); margin-bottom: 5px; display: block;">
+                                        <strong style="color: #80D5C9; font-size: 15px;">{{ item.modalidade }}</strong><br>
+                                        <span style="color: #FFFFFF; font-size: 14px;">{{ item.dias_semana }} às {{ item.horario }}</span>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </table>
+
+                            <p style="color: rgba(255, 255, 255, 0.85); font-size: 16px; line-height: 1.6; text-align: center; margin-top: 40px;">
+                                Prepare os óculos, a touca e venha com muita energia.<br>
+                                <strong>Nos vemos na piscina!</strong>
+                            </p>
+                        </td>
+                    </tr>
+
+                    <!-- Rodapé -->
+                    <tr>
+                        <td align="center" style="padding: 20px; background-color: #001524; border-top: 1px solid rgba(255, 255, 255, 0.05);">
+                            <p style="color: rgba(255, 255, 255, 0.4); font-size: 12px; margin: 0;">
+                                Este é um e-mail automático do sistema MyGym. Por favor, não responda.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+                <!-- Fim do Container Principal -->
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
