@@ -12,6 +12,7 @@
 // 12/08/26: Adição do comportamento Enter como Tab e Preview de Imagem de Upload.
 // 14/08/26: Inclusão da função aplicarMascaraCPFOuMatricula para busca dinâmica de alunos.
 // 14/08/26: Inclusão da função formatarMatriculaBlur para preenchimento de zeros à esquerda (ex: 0001).
+// 17/08/26: Inclusão da função global monitorarAlteracoes para controle inteligente do botão Salvar.
 // ==============================================================================
 
 // --- FUNÇÕES DE MÁSCARA E LIMPEZA ---
@@ -101,6 +102,71 @@ function validarCPF(cpf) {
     if (resto !== parseInt(cpf.substring(10, 11))) return false;
     
     return true;
+}
+
+// ==============================================================================
+// FUNÇÕES DE MONITORAMENTO DE ESTADO (DIRTY FORM)
+// ==============================================================================
+
+/**
+ * Monitora alterações em um formulário comparando-o com seu estado inicial.
+ * @param {string} formId - O ID do formulário HTML.
+ * @param {string} btnSalvarId - O ID do botão que será habilitado/desabilitado.
+ * @param {function} fnFormularioValido - (Opcional) Função que retorna boolean verificando regras adicionais (ex: campos obrigatórios preenchidos).
+ * @returns {function} - Retorna a função de checagem caso precise ser invocada manualmente.
+ */
+function monitorarAlteracoes(formId, btnSalvarId, fnFormularioValido = null) {
+    const form = document.getElementById(formId);
+    const btnSalvar = document.getElementById(btnSalvarId);
+    
+    if (!form || !btnSalvar) {
+        console.warn(`monitorarAlteracoes: Elementos não encontrados (Form: ${formId}, Botão: ${btnSalvarId})`);
+        return null;
+    }
+
+    // Função interna que serializa o formulário atual
+    const capturarEstado = () => {
+        const formData = new FormData(form);
+        const estado = {};
+        for (let [key, value] of formData.entries()) {
+            if (!estado[key]) {
+                estado[key] = [];
+            }
+            estado[key].push(value);
+        }
+        return JSON.stringify(estado);
+    };
+
+    // "Tira a foto" do estado assim que a função é iniciada (geralmente após a carga do banco)
+    const estadoInicial = capturarEstado();
+
+    const checarEstado = () => {
+        const estadoAtual = capturarEstado();
+        const formFoiAlterado = (estadoInicial !== estadoAtual);
+        
+        let camposValidos = true;
+        if (typeof fnFormularioValido === 'function') {
+            camposValidos = fnFormularioValido(); // Valida obrigatoriedades da tela específica
+        }
+
+        // Habilita o botão APENAS se houver alteração E os campos estiverem válidos
+        btnSalvar.disabled = !(formFoiAlterado && camposValidos);
+    };
+
+    // Dispara a checagem sempre que um input disparar evento
+    form.addEventListener('input', checarEstado);
+    form.addEventListener('change', checarEstado);
+
+    // Usa MutationObserver para pegar elementos ocultos ou gerados via JS dinamicamente (ex: inputs da grade)
+    const observer = new MutationObserver(() => {
+        checarEstado();
+    });
+    observer.observe(form, { childList: true, subtree: true });
+
+    // Garante o estado correto do botão logo na primeira execução
+    checarEstado();
+
+    return checarEstado;
 }
 
 // ==============================================================================

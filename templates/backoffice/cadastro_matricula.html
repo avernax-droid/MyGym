@@ -15,6 +15,11 @@
  14/08/26: Integração com static/validacoes.js, API de histórico de matrículas e trava contra choque de horários (Front-end e Back-end assíncrono).
  14/08/26: Inclusão do botão "X" para fechar o modal de horários sem aplicar alterações e formatação da matrícula com zeros à esquerda.
  14/08/26: Inclusão do campo oculto matricula_id, suporte para carregamento de edição e renomeação do botão de submissão para "Salvar".
+ 14/08/26: Refatoração do Modal de Horários para layout em Matriz Interativa (Dias x Horas Cheias).
+ 14/08/26: Inclusão de botão de lixeira para remover atividade e lógica de passo a passo (Wizard) na grade de horários.
+ 17/08/26: Ajuste CSS no botão "Definir Dias e Horários" para evitar quebra de linha (white-space: nowrap).
+ 17/08/26: Ajuste na exibição do resumo de horários na grade para formato de lista (um por linha com separador hífen).
+ 17/08/26: Integração da função global monitorarAlteracoes para controle inteligente do botão Salvar.
 ============================================================================== #}
 
 {% extends "base.html" %}
@@ -285,15 +290,48 @@
         margin: 0;
     }
     
-    .dia-horario-row {
-        background-color: rgba(255,255,255,0.02);
-        padding: 0.6rem 1rem;
+    /* === Estilos da Nova Matriz Interativa === */
+    .matriz-container {
+        overflow-x: auto;
         border-radius: 6px;
-        border: 1px solid rgba(255,255,255,0.05);
-        transition: background-color 0.3s ease;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        margin-top: 1rem;
     }
-    .dia-horario-row:hover {
-        background-color: rgba(255,255,255,0.05);
+    .matriz-horarios {
+        width: 100%;
+        border-collapse: collapse;
+        color: #FFFFFF;
+        font-size: 0.85rem;
+    }
+    .matriz-horarios th, .matriz-horarios td {
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        text-align: center;
+        padding: 0.6rem 0.3rem;
+        vertical-align: middle;
+    }
+    .matriz-horarios th {
+        background-color: rgba(255, 255, 255, 0.05);
+        font-weight: 600;
+        color: #80D5C9;
+    }
+    .celula-hora {
+        font-weight: 600;
+        background-color: rgba(255, 255, 255, 0.02);
+        color: rgba(255, 255, 255, 0.7);
+        width: 60px;
+    }
+    .celula-matriz {
+        cursor: pointer;
+        transition: all 0.2s ease;
+        user-select: none;
+    }
+    .celula-matriz:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+    .celula-selecionada, .celula-selecionada:hover {
+        background-color: #80D5C9 !important;
+        color: #001524 !important;
+        font-weight: bold;
     }
 </style>
 {% endblock %}
@@ -400,55 +438,19 @@
 <!-- INCLUSÃO DO COMPONENTE DE MODALIDADES -->
 {% include 'componentes/modal_modalidades.html' %}
 
-<!-- NOVO MODAL: SELEÇÃO FLUIDA DE DIAS DA SEMANA E HORÁRIOS -->
+<!-- MODAL DE MATRIZ DE HORÁRIOS (Redimensionado para 750px) -->
 <div id="modalDiasHorarios" class="modal-modalidades">
-    <div class="modal-modalidades-content" style="max-width: 450px; position: relative;">
+    <div class="modal-modalidades-content" style="max-width: 750px; position: relative;">
         <button type="button" id="btnFecharModalDiasX" style="position: absolute; top: 1.5rem; right: 1.5rem; background: transparent; border: none; color: #FFFFFF; font-size: 1.8rem; cursor: pointer; opacity: 0.6; transition: opacity 0.3s ease; line-height: 1; padding: 0;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="Fechar">&times;</button>
-        <h3 id="tituloModalDias" style="margin-top: 0; margin-bottom: 1.5rem; font-size: 1.2rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem; color: #80D5C9; padding-right: 2rem;">Definir Horários</h3>
+        <h3 id="tituloModalDias" style="margin-top: 0; margin-bottom: 0.5rem; font-size: 1.2rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem; color: #80D5C9; padding-right: 2rem;">Definir Horários</h3>
         
         <input type="hidden" id="modalidadeAtualIndex">
+        <p style="font-size: 0.85rem; color: rgba(255,255,255,0.5); margin-bottom: 0;">Clique nas células para selecionar os dias e horários</p>
 
-        <div class="checkbox-grid" style="gap: 0.8rem;">
-            
-            <div class="dia-horario-row" style="display: flex; align-items: center; justify-content: space-between;">
-                <label class="checkbox-label"><input type="checkbox" class="chk-dia" value="Segunda-feira"> Segunda-feira</label>
-                <input type="time" class="input-limpo input-time-dia" style="display: none; padding: 0.3rem 0.6rem; max-width: 120px; text-align: center;">
-            </div>
-            
-            <div class="dia-horario-row" style="display: flex; align-items: center; justify-content: space-between;">
-                <label class="checkbox-label"><input type="checkbox" class="chk-dia" value="Terça-feira"> Terça-feira</label>
-                <input type="time" class="input-limpo input-time-dia" style="display: none; padding: 0.3rem 0.6rem; max-width: 120px; text-align: center;">
-            </div>
-            
-            <div class="dia-horario-row" style="display: flex; align-items: center; justify-content: space-between;">
-                <label class="checkbox-label"><input type="checkbox" class="chk-dia" value="Quarta-feira"> Quarta-feira</label>
-                <input type="time" class="input-limpo input-time-dia" style="display: none; padding: 0.3rem 0.6rem; max-width: 120px; text-align: center;">
-            </div>
-            
-            <div class="dia-horario-row" style="display: flex; align-items: center; justify-content: space-between;">
-                <label class="checkbox-label"><input type="checkbox" class="chk-dia" value="Quinta-feira"> Quinta-feira</label>
-                <input type="time" class="input-limpo input-time-dia" style="display: none; padding: 0.3rem 0.6rem; max-width: 120px; text-align: center;">
-            </div>
-            
-            <div class="dia-horario-row" style="display: flex; align-items: center; justify-content: space-between;">
-                <label class="checkbox-label"><input type="checkbox" class="chk-dia" value="Sexta-feira"> Sexta-feira</label>
-                <input type="time" class="input-limpo input-time-dia" style="display: none; padding: 0.3rem 0.6rem; max-width: 120px; text-align: center;">
-            </div>
-            
-            <div class="dia-horario-row" style="display: flex; align-items: center; justify-content: space-between;">
-                <label class="checkbox-label"><input type="checkbox" class="chk-dia" value="Sábado"> Sábado</label>
-                <input type="time" class="input-limpo input-time-dia" style="display: none; padding: 0.3rem 0.6rem; max-width: 120px; text-align: center;">
-            </div>
-            
-            <div class="dia-horario-row" style="display: flex; align-items: center; justify-content: space-between;">
-                <label class="checkbox-label"><input type="checkbox" class="chk-dia" value="Domingo"> Domingo</label>
-                <input type="time" class="input-limpo input-time-dia" style="display: none; padding: 0.3rem 0.6rem; max-width: 120px; text-align: center;">
-            </div>
-            
-        </div>
+        <!-- CONTAINER DA MATRIZ GERADA VIA JS -->
+        <div id="tabelaMatrizContainer" class="matriz-container"></div>
 
-        <div style="text-align: right; margin-top: 2rem; display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-size: 0.8rem; color: rgba(255,255,255,0.5);">Selecione os dias e insira a hora</span>
+        <div style="text-align: right; margin-top: 2rem;">
             <button type="button" id="btnFecharModalDias" class="btn-custom btn-salvar" style="padding: 0.6rem 2rem; font-size: 0.9rem; width: auto;">Confirmar Horários</button>
         </div>
     </div>
@@ -469,7 +471,6 @@
 
     document.addEventListener("DOMContentLoaded", function() {
         const form = document.getElementById("formMatricula");
-        const inputsValidaveis = form.querySelectorAll(".campo-validavel");
         const btnSalvar = document.getElementById("btnSalvar");
         
         const inputBusca = document.getElementById("busca_aluno");
@@ -487,6 +488,62 @@
         const modalDiasHorarios = document.getElementById("modalDiasHorarios");
         const btnFecharModalDias = document.getElementById("btnFecharModalDias");
         const btnFecharModalDiasX = document.getElementById("btnFecharModalDiasX");
+
+        // === INTEGRAÇÃO DO MONITORAMENTO GLOBAL ===
+        // Valida apenas a obrigatoriedade e retorna boolean
+        function validarFormulario() {
+            let formularioValido = true;
+            const camposParaValidar = form.querySelectorAll(".campo-validavel");
+            
+            camposParaValidar.forEach(input => {
+                if (input.value.trim() === "") {
+                    formularioValido = false;
+                }
+            });
+
+            if (containerGrade.children.length === 0) {
+                formularioValido = false;
+            } else {
+                const linhas = containerGrade.querySelectorAll('.linha-grade');
+                linhas.forEach(linha => {
+                    if(linha.querySelectorAll('input[name="grade_horario[]"]').length === 0) {
+                        formularioValido = false;
+                    }
+                });
+            }
+            return formularioValido;
+        }
+
+        // Chamada inicial (snapshot vazio)
+        if (typeof monitorarAlteracoes === 'function') {
+            monitorarAlteracoes('formMatricula', 'btnSalvar', validarFormulario);
+        }
+
+        // === CONSTRUÇÃO DA MATRIZ DE HORÁRIOS ===
+        const diasSemana = ["Domingo", "Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira", "Sábado"];
+        const diasSiglas = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+        let tabelaHTML = '<table class="matriz-horarios"><thead><tr><th>Hora</th>';
+        
+        diasSiglas.forEach(d => tabelaHTML += `<th>${d}</th>`);
+        tabelaHTML += '</tr></thead><tbody>';
+        
+        for(let h = 6; h <= 22; h++) {
+            let horaStr = h.toString().padStart(2, '0') + ':00';
+            tabelaHTML += `<tr><td class="celula-hora">${horaStr}</td>`;
+            diasSemana.forEach(dia => {
+                tabelaHTML += `<td class="celula-matriz" data-dia="${dia}" data-horario="${horaStr}"></td>`;
+            });
+            tabelaHTML += '</tr>';
+        }
+        tabelaHTML += '</tbody></table>';
+        document.getElementById('tabelaMatrizContainer').innerHTML = tabelaHTML;
+
+        // Adiciona evento de clique nas células
+        document.querySelectorAll('.celula-matriz').forEach(celula => {
+            celula.addEventListener('click', function() {
+                this.classList.toggle('celula-selecionada');
+            });
+        });
 
         // === IDENTIFICAÇÃO DINÂMICA: CPF VS MATRÍCULA ===
         inputBusca.addEventListener("input", function(e) {
@@ -515,7 +572,12 @@
                 chksModalidade.forEach(chk => chk.checked = false);
                 containerGrade.innerHTML = "";
                 
-                validarFormulario();
+                // Reinicia o monitoramento com os campos limpos
+                setTimeout(() => {
+                    if (typeof monitorarAlteracoes === 'function') {
+                        monitorarAlteracoes('formMatricula', 'btnSalvar', validarFormulario);
+                    }
+                }, 100);
             }
         });
 
@@ -524,6 +586,7 @@
         btnFecharModal.addEventListener("click", () => {
             modalModalidades.style.display = "none";
             gerarGradeDinamica();
+            verificarPendenciasGrade();
         });
 
         function gerarGradeDinamica() {
@@ -545,8 +608,11 @@
                             </div>
                             <div style="flex: 1; display: flex; flex-direction: column; gap: 0.5rem;">
                                 <div style="display: flex; align-items: center; gap: 1rem;">
-                                    <button type="button" class="btn-custom btn-cancelar" style="padding: 0.4rem 1rem; font-size: 0.8rem; width: auto;" onclick="abrirModalDias(${index}, '${modalidade}')">
+                                    <button type="button" class="btn-custom btn-cancelar" style="padding: 0.4rem 1rem; font-size: 0.8rem; width: auto; white-space: nowrap;" onclick="abrirModalDias(${index}, '${modalidade}')">
                                         <i class="fas fa-clock" style="margin-right: 5px;"></i> Definir Dias e Horários
+                                    </button>
+                                    <button type="button" class="btn-custom btn-cancelar" style="padding: 0.4rem 0.8rem; font-size: 0.9rem; width: auto; color: #ff6b6b; border-color: rgba(255,107,107,0.3);" onclick="removerModalidade('${modalidade}')" title="Remover Atividade">
+                                        <i class="fas fa-trash"></i>
                                     </button>
                                     <span class="resumo-horarios" style="font-size: 0.85rem; color: rgba(255, 255, 255, 0.4); font-style: italic;">Nenhum horário definido. Clique no botão ao lado.</span>
                                 </div>
@@ -562,22 +628,35 @@
                 }
                 index++;
             });
-
-            validarFormulario();
         }
 
-        // === EVENTOS: MODAL DE DIAS E HORÁRIOS ===
+        window.removerModalidade = function(modalidade) {
+            if(confirm(`Deseja realmente remover a atividade ${modalidade} da grade?`)) {
+                const chk = document.querySelector(`.chk-modalidade[value="${modalidade}"]`);
+                if(chk) chk.checked = false;
+                gerarGradeDinamica();
+            }
+        };
+
+        function verificarPendenciasGrade() {
+            const linhas = document.querySelectorAll('.linha-grade');
+            for (let linha of linhas) {
+                const hiddens = linha.querySelectorAll('input[name="grade_horario[]"]');
+                if (hiddens.length === 0) {
+                    const index = linha.id.split('-')[2];
+                    const modalidade = linha.querySelector('.modalidade-titulo').textContent.trim();
+                    abrirModalDias(index, modalidade);
+                    return true; 
+                }
+            }
+            return false; 
+        }
+
         window.abrirModalDias = function(index, modalidade) {
             document.getElementById('modalidadeAtualIndex').value = index;
             document.getElementById('tituloModalDias').textContent = modalidade;
             
-            document.querySelectorAll('.chk-dia').forEach(chk => {
-                chk.checked = false;
-                const timeInput = chk.closest('.dia-horario-row').querySelector('.input-time-dia');
-                timeInput.style.display = 'none';
-                timeInput.value = '';
-                timeInput.style.borderColor = 'rgba(255, 255, 255, 0.2)'; 
-            });
+            document.querySelectorAll('.celula-selecionada').forEach(c => c.classList.remove('celula-selecionada'));
 
             const row = document.getElementById(`linha-grade-${index}`);
             if (row) {
@@ -585,12 +664,13 @@
                 const inputsHorarios = row.querySelectorAll('input[name="grade_horario[]"]');
 
                 for(let i = 0; i < inputsDias.length; i++) {
-                    const chk = document.querySelector(`.chk-dia[value="${inputsDias[i].value}"]`);
-                    if(chk) {
-                        chk.checked = true;
-                        const timeInput = chk.closest('.dia-horario-row').querySelector('.input-time-dia');
-                        timeInput.style.display = 'block';
-                        timeInput.value = inputsHorarios[i].value;
+                    const dia = inputsDias[i].value;
+                    let hora = inputsHorarios[i].value;
+                    if(hora.length > 5) hora = hora.substring(0, 5);
+                    
+                    const celula = document.querySelector(`.celula-matriz[data-dia="${dia}"][data-horario="${hora}"]`);
+                    if(celula) {
+                        celula.classList.add('celula-selecionada');
                     }
                 }
             }
@@ -598,55 +678,24 @@
             modalDiasHorarios.style.display = "flex";
         };
 
-        document.querySelectorAll('.chk-dia').forEach(chk => {
-            chk.addEventListener('change', function() {
-                const timeInput = this.closest('.dia-horario-row').querySelector('.input-time-dia');
-                if (this.checked) {
-                    timeInput.style.display = 'block';
-                    timeInput.focus();
-                } else {
-                    timeInput.style.display = 'none';
-                    timeInput.value = '';
-                    timeInput.style.borderColor = 'rgba(255, 255, 255, 0.2)'; 
-                }
-            });
-        });
-
-        // --- NOVO: FECHAR MODAL DE HORÁRIOS (BOTÃO X) ---
         btnFecharModalDiasX.addEventListener("click", () => {
             document.getElementById("modalDiasHorarios").style.display = "none";
         });
 
-        // --- NOVO: FUNÇÃO ASSÍNCRONA PARA CONFIRMAR E VALIDAR HORÁRIOS ---
         btnFecharModalDias.addEventListener("click", async () => {
             const index = document.getElementById('modalidadeAtualIndex').value;
             const row = document.getElementById(`linha-grade-${index}`);
             const modalidade = row.querySelector('.modalidade-titulo').textContent.trim();
             
-            let temErroFaltaHorario = false;
             const horariosSelecionados = [];
 
-            document.querySelectorAll('.chk-dia').forEach(chk => {
-                if (chk.checked) {
-                    const timeInput = chk.closest('.dia-horario-row').querySelector('.input-time-dia');
-                    const timeValue = timeInput.value;
-                    
-                    if (!timeValue) {
-                        temErroFaltaHorario = true; 
-                        timeInput.style.borderColor = '#ff6b6b'; 
-                    } else {
-                        timeInput.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                        horariosSelecionados.push({ dia: chk.value, horario: timeValue });
-                    }
-                }
+            document.querySelectorAll('.celula-selecionada').forEach(celula => {
+                horariosSelecionados.push({
+                    dia: celula.getAttribute('data-dia'),
+                    horario: celula.getAttribute('data-horario')
+                });
             });
 
-            if (temErroFaltaHorario) {
-                alert("Atenção: Preencha o horário para todos os dias selecionados ou desmarque-os.");
-                return;
-            }
-
-            // --- 1. Trava de Choque Front-end (Modalidades que estão na tela) ---
             const horariosExistentesTela = [];
             document.querySelectorAll('.linha-grade').forEach(linha => {
                 if (linha.id !== `linha-grade-${index}`) {
@@ -674,7 +723,6 @@
                 return;
             }
 
-            // --- 2. Trava de Choque Back-end (Consulta Assíncrona no Banco de Dados) ---
             const alunoId = document.getElementById('aluno_id').value;
             if (alunoId && horariosSelecionados.length > 0) {
                 try {
@@ -701,7 +749,7 @@
                     const data = await response.json();
                     if (data.conflito) {
                         alert(`Conflito no Banco de Dados:\n${data.mensagem}`);
-                        return; // Impede o fechamento do modal e mantém Efetivar Matrícula bloqueado
+                        return;
                     }
                 } catch (error) {
                     console.error("Erro ao validar no backend:", error);
@@ -712,7 +760,6 @@
                 }
             }
 
-            // --- 3. Gravação Visual se tudo passou nas validações ---
             const containerHiddens = row.querySelector('.hiddens-container');
             const spanResumo = row.querySelector('.resumo-horarios');
             
@@ -721,7 +768,7 @@
 
             horariosSelecionados.forEach(item => {
                 const nomeCurto = item.dia.split('-')[0].substring(0, 3);
-                resumos.push(`${nomeCurto} às ${item.horario}`);
+                resumos.push(`${nomeCurto} - ${item.horario}`);
                 
                 containerHiddens.innerHTML += `
                     <input type="hidden" name="grade_modalidade[]" value="${modalidade}">
@@ -731,30 +778,32 @@
             });
 
             if (resumos.length > 0) {
-                spanResumo.textContent = resumos.join(' | ');
+                spanResumo.innerHTML = resumos.join('<br>');
                 spanResumo.style.color = '#80D5C9';
                 spanResumo.style.fontWeight = '600';
                 spanResumo.style.fontStyle = 'normal';
             } else {
-                spanResumo.textContent = 'Nenhum horário definido. Clique no botão ao lado.';
+                spanResumo.innerHTML = 'Nenhum horário definido. Clique no botão ao lado.';
                 spanResumo.style.color = 'rgba(255, 255, 255, 0.4)';
                 spanResumo.style.fontWeight = 'normal';
                 spanResumo.style.fontStyle = 'italic';
             }
 
             document.getElementById("modalDiasHorarios").style.display = "none";
-            validarFormulario();
+            verificarPendenciasGrade();
         });
 
         // === BUSCA DO ALUNO ===
         inputBusca.addEventListener("blur", function(e) {
-            // --- NOVO: Adiciona zeros à esquerda na matrícula ---
             if (typeof formatarMatriculaBlur === 'function') {
                 formatarMatriculaBlur(this);
             }
             
             const termoDigitado = this.value.trim();
             if (termoDigitado === "") return;
+
+            if (this.getAttribute('data-ultimo-buscado') === termoDigitado) return;
+            this.setAttribute('data-ultimo-buscado', termoDigitado);
 
             fetch(`/api/alunos/buscar?termo=${encodeURIComponent(termoDigitado)}`)
                 .then(response => response.json())
@@ -783,7 +832,6 @@
                             fotoPlaceholder.style.display = "block";
                         }
                         
-                        // === Integração do Histórico da Matrícula ===
                         if (alunoData.matricula) {
                             document.getElementById('matricula_id').value = alunoData.matricula.id;
                             document.getElementById('tipo_plano').value = alunoData.matricula.tipo_plano || "";
@@ -822,7 +870,7 @@
                                         
                                         mapModalidades[modNome].forEach(item => {
                                             const nomeCurto = item.dias_semana.split('-')[0].substring(0, 3);
-                                            resumosVisuais.push(`${nomeCurto} às ${item.horario}`);
+                                            resumosVisuais.push(`${nomeCurto} - ${item.horario}`);
                                             
                                             hiddensHTML += `
                                                 <input type="hidden" name="grade_modalidade[]" value="${modNome}">
@@ -832,7 +880,7 @@
                                         });
                                         
                                         containerHiddens.innerHTML = hiddensHTML;
-                                        spanResumo.textContent = resumosVisuais.join(' | ');
+                                        spanResumo.innerHTML = resumosVisuais.join('<br>');
                                         spanResumo.style.color = '#80D5C9';
                                         spanResumo.style.fontWeight = '600';
                                         spanResumo.style.fontStyle = 'normal';
@@ -850,7 +898,13 @@
                             containerGrade.innerHTML = "";
                         }
                         
-                        validarFormulario();
+                        // Após preencher todos os dados do banco, tira um novo "snapshot" do form
+                        setTimeout(() => {
+                            if (typeof monitorarAlteracoes === 'function') {
+                                monitorarAlteracoes('formMatricula', 'btnSalvar', validarFormulario);
+                            }
+                        }, 100);
+
                     } else {
                         spanErroBusca.textContent = data.msg || "Aluno não encontrado.";
                         spanErroBusca.style.display = "block";
@@ -885,37 +939,6 @@
                     focusableElements[index + 1].focus();
                 }
             }
-        });
-
-        // === VALIDAÇÃO DINÂMICA DA MATRÍCULA ===
-        function validarFormulario() {
-            let formularioValido = true;
-            const camposParaValidar = form.querySelectorAll(".campo-validavel");
-            
-            camposParaValidar.forEach(input => {
-                if (input.value.trim() === "") {
-                    formularioValido = false;
-                }
-            });
-
-            if (containerGrade.children.length === 0) {
-                formularioValido = false;
-            } else {
-                const linhas = containerGrade.querySelectorAll('.linha-grade');
-                linhas.forEach(linha => {
-                    if(linha.querySelectorAll('input[name="grade_horario[]"]').length === 0) {
-                        formularioValido = false;
-                    }
-                });
-            }
-
-            btnSalvar.disabled = !formularioValido;
-        }
-
-        const camposParaValidarEventos = form.querySelectorAll(".campo-validavel");
-        camposParaValidarEventos.forEach(input => {
-            input.addEventListener("input", validarFormulario);
-            input.addEventListener("change", validarFormulario);
         });
 
         form.addEventListener("submit", function(e) {

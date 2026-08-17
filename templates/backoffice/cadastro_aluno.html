@@ -17,6 +17,7 @@
            e validação obrigatória multicampos com alerta visual em abas.
  12/08/26: Inclusão do painel de exibição visual do Número da Matrícula.
  12/08/26: Formatação e alteração visual da barra de consulta após busca bem-sucedida.
+ 17/08/26: Integração da função global monitorarAlteracoes para controle inteligente do botão Salvar.
 ============================================================================== #}
 
 {% extends "base.html" %}
@@ -567,11 +568,11 @@
 </div>
 
 <script>
-    // Atualiza o estado visual das abas e do botão salvar globalmente
+    // === INTEGRAÇÃO DO MONITORAMENTO GLOBAL ===
+    // Refatorada para focar na UI das abas e retornar o boolean para o motor
     function verificarEstadoBotao() {
         const form = document.getElementById("formAluno");
         const inputsValidaveis = form.querySelectorAll(".campo-validavel");
-        const btnSalvar = document.getElementById("btnSalvar");
         
         let formPreenchido = true;
         let abasComPendencia = {
@@ -590,10 +591,6 @@
             }
         });
 
-        if (btnSalvar) {
-            btnSalvar.disabled = !formPreenchido;
-        }
-
         // Atualiza indicadores visuais (🔴)
         const mapeamentoAlertas = {
             'aba-dados-pessoais': 'alerta_dados',
@@ -611,6 +608,8 @@
                 }
             }
         }
+
+        return formPreenchido;
     }
 
     function alternarModo() {
@@ -654,7 +653,13 @@
             document.getElementById('containerContatos').innerHTML = '';
             adicionarContatoLinha();
             mudarAba('dados-pessoais');
-            verificarEstadoBotao();
+            
+            // Inicia o monitoramento global zerado para novo cadastro
+            setTimeout(() => {
+                if (typeof monitorarAlteracoes === 'function') {
+                    monitorarAlteracoes('formAluno', 'btnSalvar', verificarEstadoBotao);
+                }
+            }, 100);
         }
     }
 
@@ -802,7 +807,13 @@
         document.getElementById('btnExecutarBusca').style.display = 'none';
 
         mudarAba('dados-pessoais');
-        verificarEstadoBotao();
+        
+        // Dispara o snapshot após a carga de todos os dados dinâmicos do banco
+        setTimeout(() => {
+            if (typeof monitorarAlteracoes === 'function') {
+                monitorarAlteracoes('formAluno', 'btnSalvar', verificarEstadoBotao);
+            }
+        }, 100);
     }
 
     function executarBuscaAluno(termoOverride = null) {
@@ -866,7 +877,8 @@
             ativarPreviewImagem(inputFoto, imgFoto, phFoto);
         }
         
-        adicionarContatoLinha();
+        // O formulário de aluno, por padrão, inicia oculto até que se escolha o modo no rádio button.
+        // Assim, a chamada de monitoramento inicial só ocorrerá ao alternar para "Cadastro".
 
         const btnBusca = document.getElementById('btnExecutarBusca');
         const inputBusca = document.getElementById('busca_smart');
@@ -882,7 +894,7 @@
             });
         }
 
-        // --- 2. AJUSTE DA LÓGICA DE VALIDAÇÃO ---
+        // --- 2. GESTÃO DOS INDICADORES DE ERRO ---
         const form = document.getElementById("formAluno");
         const inputsValidaveis = form.querySelectorAll(".campo-validavel");
 
@@ -904,13 +916,10 @@
         }
 
         inputsValidaveis.forEach(input => {
-            input.addEventListener("input", verificarEstadoBotao);
             input.addEventListener("focus", ocultarErro);
             input.addEventListener("blur", exibirErro);
         });
 
-        // Configuração inicial do estado do botão
-        verificarEstadoBotao();
     });
 </script>
 {% endblock %}

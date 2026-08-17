@@ -25,6 +25,7 @@
  10/08/26: Refatoração da área de exibição de certificados para suportar múltiplos arquivos em container flex (galeria), com exibição aprimorada de nome original em PDFs.
  10/08/26: Correção na aplicação da máscara visual do campo Telefone principal herdado do RH.
  13/08/26: Refatoração estrutural (DRY): Extração do popup de modalidades para um componente centralizado (modal_modalidades.html).
+ 17/08/26: Integração da função global monitorarAlteracoes para controle inteligente do botão Salvar.
 ============================================================================== #}
 
 {% extends "base.html" %}
@@ -469,7 +470,6 @@
             let valor = e.target.value.replace(/\D/g, "");
             if (valor.length > 11) valor = valor.slice(0, 11);
             e.target.value = valor;
-            validarFormulario();
         });
         inputTelEmergencia.addEventListener("blur", (e) => aplicarMascaraTelefone(e.target));
 
@@ -613,7 +613,14 @@
                         }
                         
                         atualizarResumoModalidades();
-                        validarFormulario();
+
+                        // Após preencher o formulário inteiro, inicializamos o monitoramento de alterações
+                        setTimeout(() => {
+                            if (typeof monitorarAlteracoes === 'function') {
+                                monitorarAlteracoes('formProfessor', 'btnSalvar', validarFormulario);
+                            }
+                        }, 100);
+                        
                     } else {
                         spanErroCpf.textContent = data.msg || "Funcionário não encontrado.";
                         spanErroCpf.style.display = "block";
@@ -628,39 +635,28 @@
                 });
         });
 
-        // --- VALIDAÇÃO DINÂMICA DO FORMULÁRIO ---
+        // --- VALIDAÇÃO DINÂMICA DO FORMULÁRIO (Refatorada para uso no monitor) ---
         function validarFormulario() {
             let formularioValido = true;
-
             inputsValidaveis.forEach(input => {
-                const erroSpan = document.querySelector(`[id-erro="${input.id}"]`);
-                let campoValido = true;
-
-                if (input.value.trim() === "") campoValido = false;
-
-                if (!campoValido) {
+                if (input.value.trim() === "") {
                     formularioValido = false;
-                    if (input.value.trim() !== "") {
-                        if (erroSpan) erroSpan.style.display = "block";
-                    } else {
-                        if (erroSpan) erroSpan.style.display = "none";
-                    }
-                } else {
-                    if (erroSpan) erroSpan.style.display = "none";
                 }
             });
-
-            btnSalvar.disabled = !formularioValido;
+            return formularioValido;
         }
 
+        // --- EXIBIÇÃO DE ERROS VISUAIS ON-BLUR ---
         inputsValidaveis.forEach(input => {
-            input.addEventListener("input", validarFormulario);
-            input.addEventListener("change", validarFormulario);
             input.addEventListener("blur", function() {
                 const erroSpan = document.querySelector(`[id-erro="${input.id}"]`);
                 if (input.value.trim() === "") {
                     if (erroSpan) erroSpan.style.display = "block";
                 }
+            });
+            input.addEventListener("focus", function() {
+                const erroSpan = document.querySelector(`[id-erro="${input.id}"]`);
+                if (erroSpan) erroSpan.style.display = "none";
             });
         });
 

@@ -21,6 +21,7 @@
  05/08/26: Refatoração do script para remover redundância, passando a consumir as validações globais do arquivo static/validacoes.js.
  05/08/26: Atualização do gatilho AJAX para buscar o cadastro pelo CPF ao invés do nome.
  08/08/26: Reestruturação completa do formulário: ampliação da tela, inclusão de upload de foto, adição dos dados demográficos (sexo, data_nascimento), adição da data de início e estrutura completa de endereço integrado ao ViaCEP.
+ 17/08/26: Integração da função global monitorarAlteracoes para controle inteligente do botão Salvar.
 ============================================================================== #}
 
 {% extends "base.html" %}
@@ -374,6 +375,34 @@
         if (inputTelefone.value) aplicarMascaraTelefone(inputTelefone);
         if (inputCpf.value) aplicarMascaraCPF(inputCpf);
 
+        // --- VALIDAÇÃO DINÂMICA DO FORMULÁRIO (Refatorada para o Monitor Global) ---
+        function validarFormulario() {
+            let formularioValido = true;
+
+            inputsValidaveis.forEach(input => {
+                let campoValido = true;
+
+                if (input.value.trim() === "") {
+                    campoValido = false;
+                } else if (input === inputEmail && !validarEmail(input.value)) {
+                    campoValido = false;
+                } else if (input === inputCpf && !validarCPF(input.value)) {
+                    campoValido = false;
+                }
+
+                if (!campoValido) {
+                    formularioValido = false;
+                }
+            });
+
+            return formularioValido;
+        }
+
+        // --- INICIALIZAÇÃO DO MONITOR GLOBAL ---
+        if (typeof monitorarAlteracoes === 'function') {
+            monitorarAlteracoes('formFuncionario', 'btnSalvar', validarFormulario);
+        }
+
         // --- NAVEGAÇÃO POR ENTER ---
         // Ampliado para capturar os novos inputs da tela
         const elementosNavegacao = Array.from(form.querySelectorAll(
@@ -432,7 +461,6 @@
             let valor = e.target.value.replace(/\D/g, "");
             if (valor.length > 11) valor = valor.slice(0, 11);
             e.target.value = valor;
-            validarFormulario();
         });
         inputTelefone.addEventListener("blur", (e) => aplicarMascaraTelefone(e.target));
 
@@ -443,7 +471,6 @@
             let valor = e.target.value.replace(/\D/g, "");
             if (valor.length > 11) valor = valor.slice(0, 11);
             e.target.value = valor;
-            validarFormulario();
             
             // Reseta a imagem visualmente se o usuário alterar o CPF
             imgFoto.style.display = 'none';
@@ -499,7 +526,14 @@
                         }
 
                         aplicarMascaraTelefone(inputTelefone);
-                        validarFormulario();
+                        
+                        // Após o preenchimento, captura o novo estado com monitorarAlteracoes
+                        setTimeout(() => {
+                            if (typeof monitorarAlteracoes === 'function') {
+                                monitorarAlteracoes('formFuncionario', 'btnSalvar', validarFormulario);
+                            }
+                        }, 100);
+                        
                     } else {
                         inputFuncionarioId.value = "";
                     }
@@ -507,40 +541,8 @@
                 .catch(error => console.error("Erro ao buscar funcionário:", error));
         });
 
-        // --- VALIDAÇÃO DINÂMICA DO FORMULÁRIO ---
-        function validarFormulario() {
-            let formularioValido = true;
-
-            inputsValidaveis.forEach(input => {
-                const erroSpan = document.querySelector(`[id-erro="${input.id}"]`);
-                let campoValido = true;
-
-                if (input.value.trim() === "") {
-                    campoValido = false;
-                } else if (input === inputEmail && !validarEmail(input.value)) {
-                    campoValido = false;
-                } else if (input === inputCpf && !validarCPF(input.value)) {
-                    campoValido = false;
-                }
-
-                if (!campoValido) {
-                    formularioValido = false;
-                    if (input.value.trim() !== "") {
-                        if (erroSpan) erroSpan.style.display = "block";
-                    } else {
-                        if (erroSpan) erroSpan.style.display = "none";
-                    }
-                } else {
-                    if (erroSpan) erroSpan.style.display = "none";
-                }
-            });
-
-            btnSalvar.disabled = !formularioValido;
-        }
-
+        // Controle visual dos erros (Blur)
         inputsValidaveis.forEach(input => {
-            input.addEventListener("input", validarFormulario);
-            input.addEventListener("change", validarFormulario);
             input.addEventListener("blur", function() {
                 const erroSpan = document.querySelector(`[id-erro="${input.id}"]`);
                 if (input.value.trim() === "" || 
@@ -548,6 +550,10 @@
                    (input === inputCpf && !validarCPF(input.value))) {
                     if (erroSpan) erroSpan.style.display = "block";
                 }
+            });
+            input.addEventListener("focus", function() {
+                const erroSpan = document.querySelector(`[id-erro="${input.id}"]`);
+                if (erroSpan) erroSpan.style.display = "none";
             });
         });
 

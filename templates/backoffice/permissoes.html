@@ -12,6 +12,7 @@
  04/08/26: Compactação de layout para evitar rolagem, botão renomeado para "Salvar", 
            remoção do texto de overlay e adição do botão "X" de fechamento.
  04/08/26: Adição da rotina de limpeza de tela (reset visual e overlay) após o salvamento com sucesso.
+ 17/08/26: Integração da função global monitorarAlteracoes para controle inteligente do botão Salvar.
 ============================================================================== #}
 
 {% extends "base.html" %}
@@ -337,7 +338,7 @@
                 if (this.checked) {
                     cargoAtual = this.value;
                     painelPermissoes.classList.add('ativo');
-                    btnSalvar.disabled = false;
+                    btnSalvar.disabled = true; // Botão deve iniciar desabilitado
                     msgStatus.style.display = 'none';
                     
                     fetch(`/api/permissoes/buscar?cargo=${cargoAtual}`)
@@ -355,6 +356,14 @@
                                 }
                             }
                             lidarComAcessoFree();
+
+                            // Inicia o monitoramento após popular os dados com o snapshot exato do que veio do banco.
+                            // Neste formulário não há campos obrigatórios, então não precisamos passar a função de validação de campos.
+                            setTimeout(() => {
+                                if (typeof monitorarAlteracoes === 'function') {
+                                    monitorarAlteracoes('formPermissoes', 'btnSalvar');
+                                }
+                            }, 100);
                         })
                         .catch(error => {
                             console.error("Erro ao buscar permissões:", error);
@@ -441,8 +450,13 @@
                         // Garante que o botão salvar fique desabilitado
                         btnSalvar.disabled = true;
                     } else {
-                        // Em caso de erro, apenas reabilita o botão para tentar de novo
-                        btnSalvar.disabled = false;
+                        // Em caso de erro, reabilita o botão usando o trigger da função caso precise checar o form 
+                        if (typeof monitorarAlteracoes === 'function') {
+                            const event = new Event('change');
+                            formPermissoes.dispatchEvent(event);
+                        } else {
+                            btnSalvar.disabled = false;
+                        }
                     }
                 }, 2000);
             })
