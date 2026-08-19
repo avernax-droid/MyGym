@@ -13,6 +13,10 @@
            remoção do texto de overlay e adição do botão "X" de fechamento.
  04/08/26: Adição da rotina de limpeza de tela (reset visual e overlay) após o salvamento com sucesso.
  17/08/26: Integração da função global monitorarAlteracoes para controle inteligente do botão Salvar.
+ 18/08/26: Adição da permissão mod_cad_turma (Gestão de Turmas) na matriz de acesso.
+ 18/08/26: Correção na função lidarComAcessoFree para disparar evento de alteração e habilitar o botão Salvar dinamicamente.
+ 19/08/26: Correção na extração de dados do formulário no botão Salvar para capturar campos desabilitados programaticamente.
+ 19/08/26: Adição da permissão mod_precos (Tabela de Preços) na matriz de acesso.
 ============================================================================== #}
 
 {% extends "base.html" %}
@@ -289,8 +293,10 @@
                         ('mod_cad_aluno', 'Cadastro de Alunos'),
                         ('mod_cad_resp', 'Cadastro de Responsáveis'),
                         ('mod_cad_prof', 'Cadastro de Professores'),
+                        ('mod_cad_turma', 'Gestão de Turmas'),
+                        ('mod_precos', 'Tabela de Preços'),
                         ('mod_cad_perm', 'Cadastro de Permissões'),
-                        ('mod_grade', 'Grade de Horários'),
+                        ('mod_grade', 'Quadro de Vagas'),
                         ('mod_area_prof', 'Área do Professor'),
                         ('mod_finan_planos', 'Gestão de Matrículas, Planos e Financeiro')
                     ] %}
@@ -338,7 +344,7 @@
                 if (this.checked) {
                     cargoAtual = this.value;
                     painelPermissoes.classList.add('ativo');
-                    btnSalvar.disabled = true; // Botão deve iniciar desabilitado
+                    btnSalvar.disabled = true; 
                     msgStatus.style.display = 'none';
                     
                     fetch(`/api/permissoes/buscar?cargo=${cargoAtual}`)
@@ -357,8 +363,6 @@
                             }
                             lidarComAcessoFree();
 
-                            // Inicia o monitoramento após popular os dados com o snapshot exato do que veio do banco.
-                            // Neste formulário não há campos obrigatórios, então não precisamos passar a função de validação de campos.
                             setTimeout(() => {
                                 if (typeof monitorarAlteracoes === 'function') {
                                     monitorarAlteracoes('formPermissoes', 'btnSalvar');
@@ -385,6 +389,13 @@
                     radio.disabled = false;
                 }
             });
+
+            // Força a reavaliação do monitorarAlteracoes após alterar o estado programaticamente
+            const form = document.getElementById('formPermissoes');
+            if (form) {
+                const event = new Event('change', { bubbles: true });
+                form.dispatchEvent(event);
+            }
         }
 
         radiosFree.forEach(radio => {
@@ -397,12 +408,17 @@
             btnSalvar.disabled = true;
             btnSalvar.textContent = "Salvando...";
 
-            const formData = new FormData(formPermissoes);
             const permissoes = {};
             
-            for (const [key, value] of formData.entries()) {
-                permissoes[key] = parseInt(value);
-            }
+            // Busca manualmente todos os radios marcados dentro do form, ignorando o estado 'disabled'
+            const radiosMarcados = formPermissoes.querySelectorAll('input[type="radio"]:checked');
+            
+            radiosMarcados.forEach(radio => {
+                // Ignora o input de seleção do cargo, pegando apenas os módulos
+                if (radio.name !== 'cargo_selecionado') {
+                    permissoes[radio.name] = parseInt(radio.value);
+                }
+            });
 
             const payload = {
                 cargo: cargoAtual,
@@ -429,28 +445,21 @@
                 msgStatus.style.display = 'block';
                 btnSalvar.textContent = "Salvar"; 
                 
-                // Rotina de limpeza após 2 segundos
                 setTimeout(() => {
                     msgStatus.style.display = 'none';
                     
                     if (data.sucesso) {
-                        // Limpa o formulário de permissões
                         formPermissoes.reset();
                         
-                        // Desmarca o radio button do cargo selecionado
                         const cargoRadio = document.querySelector(`input[name="cargo_selecionado"][value="${cargoAtual}"]`);
                         if (cargoRadio) {
                             cargoRadio.checked = false;
                         }
                         cargoAtual = null;
                         
-                        // Ativa novamente o overlay (cortina escura)
                         painelPermissoes.classList.remove('ativo');
-                        
-                        // Garante que o botão salvar fique desabilitado
                         btnSalvar.disabled = true;
                     } else {
-                        // Em caso de erro, reabilita o botão usando o trigger da função caso precise checar o form 
                         if (typeof monitorarAlteracoes === 'function') {
                             const event = new Event('change');
                             formPermissoes.dispatchEvent(event);

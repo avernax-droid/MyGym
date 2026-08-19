@@ -1,0 +1,444 @@
+{# ==============================================================================
+ PROJETO: MyGym
+ MÓDULO: templates/backoffice/tabela_precos.html
+ DATA DE CRIAÇÃO: 19/08/26
+ TÍTULO: Tabela de Preços
+ FUNÇÃO: Gerenciar a tabela_precos, definindo os valores de mensalidade, trimestralidade,
+         semestralidade e anuidade com base na modalidade e na frequência semanal.
+         
+ HISTÓRICO DE ALTERAÇÕES:
+ 19/08/26: Criação da interface com formulário e injeção dinâmica de linhas via JS.
+ 19/08/26: Correção de UI/UX (Adição de rolagem max-height: 90vh) e fixação das 
+           opções de frequência (1x, 2x, 3x e Mais vezes).
+ 19/08/26: Ajuste de nomenclatura: alteração de "Mais vezes por semana" para "Mais vezes".
+============================================================================== #}
+
+{% extends "base.html" %}
+
+{% block title %}Tabela de Preços - MyGym{% endblock %}
+
+{% block head %}
+<style>
+    .container-precos {
+        background-color: #001524;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 2.5rem 3rem;
+        border-radius: 8px;
+        width: 100%;
+        max-width: 900px;
+        box-shadow: 0px 15px 35px rgba(0, 0, 0, 0.5);
+        color: #FFFFFF;
+        box-sizing: border-box;
+        position: relative;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .container-precos::-webkit-scrollbar { width: 8px; }
+    .container-precos::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.02); border-radius: 4px; }
+    .container-precos::-webkit-scrollbar-thumb { background: rgba(128, 213, 201, 0.3); border-radius: 4px; }
+
+    .btn-fechar-form {
+        position: absolute;
+        top: 1rem;
+        right: 1.5rem;
+        font-size: 1.8rem;
+        color: #FFFFFF;
+        text-decoration: none;
+        opacity: 0.6;
+        transition: opacity 0.3s ease;
+        line-height: 1;
+        z-index: 10;
+    }
+
+    .btn-fechar-form:hover {
+        opacity: 1;
+    }
+
+    .header-pagina {
+        text-align: left;
+        margin-bottom: 2rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 1rem;
+    }
+
+    .header-pagina h1 {
+        font-size: 1.8rem;
+        font-weight: 600;
+        margin: 0;
+        letter-spacing: 1px;
+        color: #80D5C9;
+    }
+    
+    .form-linha {
+        display: flex;
+        gap: 1.5rem;
+        margin-bottom: 1rem;
+        align-items: flex-end;
+    }
+
+    .form-grupo {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-grupo label {
+        margin-bottom: 0.4rem;
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.8);
+    }
+    
+    .input-limpo {
+        width: 100%;
+        padding: 0.9rem 1rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+        color: #FFFFFF;
+        font-family: var(--fonte-principal);
+        font-size: 1rem;
+        box-sizing: border-box;
+        transition: all 0.3s ease;
+    }
+
+    .input-limpo:focus {
+        outline: none;
+        border-color: #80D5C9;
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+    
+    .input-moeda {
+        text-align: right;
+    }
+    .input-moeda::placeholder {
+        text-align: right;
+    }
+
+    .custom-select-wrapper { position: relative; width: 100%; }
+    
+    .select-estilo-btn {
+        width: 100%;
+        padding: 0.9rem 1rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+        color: #FFFFFF;
+        font-family: var(--fonte-principal);
+        font-size: 1rem;
+        box-sizing: border-box;
+        transition: all 0.3s ease;
+        appearance: none;
+        background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+        background-repeat: no-repeat;
+        background-position: right 1rem top 50%;
+        background-size: 0.65rem auto;
+        cursor: pointer;
+    }
+    
+    .custom-select-options {
+        display: none; position: absolute; top: calc(100% + 4px); left: 0; width: 100%;
+        background-color: #001524; border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 6px; z-index: 1000; max-height: 250px; overflow-y: auto;
+        box-shadow: 0px 15px 35px rgba(0, 0, 0, 0.5); padding: 0.5rem 0;
+    }
+    .custom-select-options.show { display: block; }
+    .optgroup-label { color: #80D5C9; font-size: 0.8rem; font-weight: 600; padding: 0.5rem 1rem; background-color: rgba(128, 213, 201, 0.1); text-transform: uppercase; margin: 0.5rem 0.5rem; border-radius: 4px; }
+    .custom-option { padding: 0.5rem 1rem 0.5rem 1.5rem; color: rgba(255, 255, 255, 0.85); cursor: pointer; transition: all 0.2s ease; font-size: 0.9rem; }
+    .custom-option:hover { background-color: rgba(255, 255, 255, 0.1); color: #80D5C9; padding-left: 1.8rem; }
+    
+    .tabela-precos-container {
+        margin-top: 1.5rem;
+        background-color: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+        padding: 1rem;
+        display: none; 
+    }
+    
+    .linha-preco {
+        display: flex;
+        gap: 1rem;
+        align-items: center;
+        padding-bottom: 0.8rem;
+        margin-bottom: 0.8rem;
+        border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+    }
+    
+    .linha-preco:last-child {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+    
+    .label-freq {
+        font-weight: 600;
+        color: #80D5C9;
+        min-width: 140px;
+    }
+    
+    .grupo-valor {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+    .grupo-valor label {
+        font-size: 0.75rem;
+        color: rgba(255,255,255,0.5);
+        margin-bottom: 2px;
+    }
+
+    .form-acoes {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+
+    .btn-custom {
+        padding: 0.9rem 2.5rem;
+        border-radius: 6px;
+        font-family: var(--fonte-principal);
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        text-decoration: none;
+        text-align: center;
+        transition: all 0.3s ease;
+        border: none;
+    }
+
+    .btn-salvar {
+        background-color: #80D5C9;
+        color: #002B49;
+    }
+    .btn-salvar:disabled {
+        background-color: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.3);
+        cursor: not-allowed;
+    }
+    .btn-salvar:not(:disabled):hover {
+        background-color: #ffffff;
+    }
+    
+    .msg-aviso {
+        color: #ffb86c;
+        font-size: 0.85rem;
+        font-style: italic;
+        margin-top: 0.5rem;
+        display: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-precos">
+    <a href="/" class="btn-fechar-form" title="Fechar">&times;</a>
+
+    <header class="header-pagina">
+        <h1>Tabela de Preços</h1>
+    </header>
+
+    <form id="formPrecos" action="/backoffice/precos/salvar" method="POST">
+        
+        <div class="form-linha">
+            <div class="form-grupo">
+                <label>Selecione a Modalidade *</label>
+                <div class="custom-select-wrapper" id="wrapper_mod">
+                    <input type="text" id="filtro_mod_display" class="select-estilo-btn" readonly value="Selecione..." required>
+                    <input type="hidden" id="modalidade_input" name="modalidade" value="">
+                    
+                    <div class="custom-select-options" id="options_mod">
+                        <div class="optgroup-label">GINÁSTICA</div>
+                        <div class="custom-option" data-value="Musculação">Musculação</div>
+                        <div class="custom-option" data-value="Treinamento Funcional">Treinamento Funcional</div>
+                        <div class="custom-option" data-value="HIIT">HIIT</div>
+                        <div class="custom-option" data-value="Spinning">Spinning</div>
+                        <div class="custom-option" data-value="Jump">Jump</div>
+                        <div class="custom-option" data-value="Fitdance / Zumba">Fitdance / Zumba</div>
+                        <div class="custom-option" data-value="Body Pump / Localizada / GAP">Body Pump / Localizada / GAP</div>
+                        <div class="custom-option" data-value="Step">Step</div>
+                        <div class="custom-option" data-value="Yoga">Yoga</div>
+                        <div class="custom-option" data-value="Pilates">Pilates</div>
+                        <div class="custom-option" data-value="Lutas Fitness">Lutas Fitness</div>
+                        <div class="custom-option" data-value="Cross Training">Cross Training</div>
+                        <div class="optgroup-label">PISCINA</div>
+                        <div class="custom-option" data-value="Natação Bebê">Natação Bebê</div>
+                        <div class="custom-option" data-value="Natação Infantil">Natação Infantil</div>
+                        <div class="custom-option" data-value="Natação Adulto">Natação Adulto</div>
+                        <div class="custom-option" data-value="Natação Competição">Natação Competição</div>
+                        <div class="custom-option" data-value="Hidroginástica">Hidroginástica</div>
+                        <div class="custom-option" data-value="Hidroterapia">Hidroterapia</div>
+                        <div class="custom-option" data-value="Hidrobike">Hidrobike</div>
+                        <div class="custom-option" data-value="Hidro Jump">Hidro Jump</div>
+                        <div class="custom-option" data-value="Deep Running">Deep Running</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="avisoMusculacao" class="msg-aviso">
+            * Para Musculação, preencha apenas a linha de "Frequência Livre".
+        </div>
+
+        <div class="tabela-precos-container" id="painelPrecos">
+            <!-- As linhas são injetadas via JavaScript dependendo da modalidade -->
+        </div>
+
+        <div class="form-acoes">
+            <button type="submit" id="btnSalvar" class="btn-custom btn-salvar" disabled>Salvar Tabela</button>
+        </div>
+
+    </form>
+</div>
+
+<script>
+    function formatarMoeda(elemento) {
+        let valor = elemento.value.replace(/\D/g, "");
+        if (valor === "") {
+            elemento.value = "";
+            return;
+        }
+        valor = (parseInt(valor) / 100).toFixed(2) + "";
+        valor = valor.replace(".", ",");
+        valor = valor.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
+        elemento.value = "R$ " + valor;
+    }
+
+    document.addEventListener("DOMContentLoaded", function() {
+        const form = document.getElementById("formPrecos");
+        const painelPrecos = document.getElementById("painelPrecos");
+        const inputMod = document.getElementById("modalidade_input");
+        const avisoMusculacao = document.getElementById("avisoMusculacao");
+        
+        if (typeof configurarEnterComoTab === 'function') configurarEnterComoTab();
+
+        const wrapper = document.getElementById('wrapper_mod');
+        const display = document.getElementById('filtro_mod_display');
+        const optionsContainer = document.getElementById('options_mod');
+
+        display.addEventListener('click', function(e) {
+            e.stopPropagation(); 
+            optionsContainer.classList.toggle('show');
+        });
+
+        document.addEventListener('click', function(e) {
+            if (!wrapper.contains(e.target)) optionsContainer.classList.remove('show');
+        });
+
+        optionsContainer.addEventListener('click', function(e) {
+            if (e.target.classList.contains('custom-option')) {
+                const modSelecionada = e.target.getAttribute('data-value');
+                display.value = e.target.textContent;
+                inputMod.value = modSelecionada;
+                optionsContainer.classList.remove('show');
+                
+                carregarGradeDePrecos(modSelecionada);
+            }
+        });
+
+        function carregarGradeDePrecos(modalidade) {
+            painelPrecos.style.display = "block";
+            painelPrecos.innerHTML = '<div style="color: rgba(255,255,255,0.5);">Buscando valores no banco de dados...</div>';
+            
+            const isMusculacao = (modalidade === "Musculação");
+            if (isMusculacao) {
+                avisoMusculacao.style.display = "block";
+            } else {
+                avisoMusculacao.style.display = "none";
+            }
+
+            fetch(`/api/precos/buscar?modalidade=${encodeURIComponent(modalidade)}`)
+                .then(response => response.json())
+                .then(data => {
+                    let mapPrecos = {};
+                    if (data.sucesso && data.precos) {
+                        data.precos.forEach(p => {
+                            mapPrecos[p.frequencia] = p;
+                        });
+                    }
+                    
+                    painelPrecos.innerHTML = '';
+                    
+                    if (isMusculacao) {
+                        gerarLinhaFormulario(99, "Frequência Livre", mapPrecos[99]);
+                    } else {
+                        // Injeção fixa das 4 opções solicitadas
+                        gerarLinhaFormulario(1, "1x por semana", mapPrecos[1]);
+                        gerarLinhaFormulario(2, "2x por semana", mapPrecos[2]);
+                        gerarLinhaFormulario(3, "3x por semana", mapPrecos[3]);
+                        gerarLinhaFormulario(4, "Mais vezes", mapPrecos[4]);
+                    }
+
+                    painelPrecos.querySelectorAll('.input-moeda').forEach(input => {
+                        if (input.value && input.value !== "0.00") {
+                            let valStr = parseFloat(input.value).toFixed(2).replace('.', ''); 
+                            input.value = valStr;
+                            formatarMoeda(input);
+                        } else {
+                            input.value = "";
+                        }
+                        
+                        input.addEventListener('input', function() { formatarMoeda(this); });
+                    });
+
+                    setTimeout(() => {
+                        if (typeof monitorarAlteracoes === 'function') {
+                            monitorarAlteracoes('formPrecos', 'btnSalvar');
+                        }
+                    }, 100);
+                })
+                .catch(error => {
+                    console.error("Erro ao buscar preços:", error);
+                    painelPrecos.innerHTML = '<div style="color: #ff6b6b;">Erro ao carregar dados.</div>';
+                });
+        }
+
+        function gerarLinhaFormulario(freqValue, label, dados) {
+            const m = dados ? dados.mensal : "";
+            const t = dados ? dados.trimestral : "";
+            const s = dados ? dados.semestral : "";
+            const a = dados ? dados.anual : "";
+
+            const html = `
+                <div class="linha-preco">
+                    <input type="hidden" name="frequencia[]" value="${freqValue}">
+                    <div class="label-freq">${label}</div>
+                    
+                    <div class="grupo-valor">
+                        <label>Mensal</label>
+                        <input type="text" name="mensal[]" class="input-limpo input-moeda" placeholder="R$ 0,00" value="${m}">
+                    </div>
+                    
+                    <div class="grupo-valor">
+                        <label>Trimestral</label>
+                        <input type="text" name="trimestral[]" class="input-limpo input-moeda" placeholder="R$ 0,00" value="${t}">
+                    </div>
+                    
+                    <div class="grupo-valor">
+                        <label>Semestral</label>
+                        <input type="text" name="semestral[]" class="input-limpo input-moeda" placeholder="R$ 0,00" value="${s}">
+                    </div>
+                    
+                    <div class="grupo-valor">
+                        <label>Anual</label>
+                        <input type="text" name="anual[]" class="input-limpo input-moeda" placeholder="R$ 0,00" value="${a}">
+                    </div>
+                </div>
+            `;
+            painelPrecos.insertAdjacentHTML('beforeend', html);
+        }
+
+        form.addEventListener("submit", function(e) {
+            const inputs = form.querySelectorAll(".input-moeda");
+            inputs.forEach(tx => {
+                if(tx.value) {
+                    tx.value = tx.value.replace("R$ ", "").replace(/\./g, "").replace(",", ".");
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

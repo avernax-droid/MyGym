@@ -1,0 +1,880 @@
+{# 
+==============================================================================
+PROJETO: MyGym
+MÓDULO: templates/backoffice/quadro_vagas.html
+DATA DE CRIAÇÃO: 18/08/26
+TÍTULO: Quadro de Vagas e Simulador de Preços
+FUNÇÃO: Permitir à recepção consultar turmas, selecionar atividades visualmente
+        e apresentar propostas de planos/valores antes do cadastro do aluno.
+
+HISTÓRICO DE ALTERAÇÕES:
+18/08/26: Criação da interface de consulta com filtros dinâmicos e modal de captação de leads.
+19/08/26: Refatoração para Matriz Dinâmica de Horários (Grid) com cores de status.
+19/08/26: Remoção do botão de busca (carregamento automático via select) e ocultação do carrinho.
+19/08/26: Implementação do Popup (Modal) de Simulador de Valores com base na frequência selecionada e integração com a API de Preços.
+============================================================================== 
+#}
+
+{% extends "base.html" %}
+
+{% block title %}Quadro de Ocupação - MyGym{% endblock %}
+
+{% block head %}
+<style>
+    .container-vagas {
+        background-color: #001524;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 2rem 2.5rem;
+        border-radius: 8px;
+        width: 100%;
+        max-width: 950px;
+        box-shadow: 0px 15px 35px rgba(0, 0, 0, 0.5);
+        color: #FFFFFF;
+        box-sizing: border-box;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        height: 85vh;
+    }
+
+    .btn-fechar-form {
+        position: absolute;
+        top: 1rem;
+        right: 1.5rem;
+        font-size: 1.8rem;
+        color: #FFFFFF;
+        text-decoration: none;
+        opacity: 0.6;
+        transition: opacity 0.3s ease;
+        line-height: 1;
+    }
+
+    .btn-fechar-form:hover {
+        opacity: 1;
+    }
+
+    .header-pagina {
+        text-align: left;
+        margin-bottom: 1.5rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 1rem;
+    }
+
+    .header-pagina h1 {
+        font-size: 1.8rem;
+        font-weight: 600;
+        margin: 0 0 0.3rem 0;
+        letter-spacing: 1px;
+        color: #80D5C9;
+    }
+
+    .header-pagina p {
+        margin: 0;
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.6);
+    }
+
+    .area-filtros {
+        display: flex;
+        gap: 1.5rem;
+        margin-bottom: 1.5rem;
+        align-items: flex-end;
+        justify-content: center;
+    }
+
+    .form-grupo {
+        width: 100%;
+        max-width: 450px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-grupo label {
+        margin-bottom: 0.4rem;
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    .custom-select-wrapper {
+        position: relative;
+        width: 100%;
+    }
+
+    .select-estilo-btn {
+        width: 100%;
+        padding: 0.8rem 1rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+        color: #FFFFFF;
+        font-family: var(--fonte-principal);
+        font-size: 0.95rem;
+        box-sizing: border-box;
+        transition: all 0.3s ease;
+        appearance: none;
+        background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+        background-repeat: no-repeat;
+        background-position: right 1rem top 50%;
+        background-size: 0.65rem auto;
+        cursor: pointer;
+    }
+
+    .select-estilo-btn:focus {
+        outline: none;
+        border-color: #80D5C9;
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .custom-select-options {
+        display: none;
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        width: 100%;
+        background-color: #001524;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 6px;
+        z-index: 1000;
+        max-height: 350px;
+        overflow-y: auto;
+        box-shadow: 0px 15px 35px rgba(0, 0, 0, 0.5);
+        padding: 0.5rem 0;
+    }
+
+    .custom-select-options.show { display: block; }
+
+    .optgroup-label {
+        color: #80D5C9;
+        font-size: 0.8rem;
+        font-weight: 600;
+        padding: 0.5rem 1rem;
+        margin: 0.5rem 0.5rem;
+        background-color: rgba(128, 213, 201, 0.1);
+        border-radius: 4px;
+        text-transform: uppercase;
+    }
+
+    .custom-option {
+        padding: 0.5rem 1rem 0.5rem 1.5rem;
+        color: rgba(255, 255, 255, 0.85);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.9rem;
+    }
+
+    .custom-option:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        color: #80D5C9;
+        padding-left: 1.8rem;
+    }
+    
+    .custom-select-options::-webkit-scrollbar { width: 6px; }
+    .custom-select-options::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.02); }
+    .custom-select-options::-webkit-scrollbar-thumb { background: rgba(128, 213, 201, 0.3); border-radius: 3px; }
+
+    .area-resultados {
+        flex: 1;
+        overflow-y: auto;
+        background-color: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+        padding: 1rem;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .area-resultados::-webkit-scrollbar { width: 6px; }
+    .area-resultados::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 3px; }
+
+    .msg-vazio {
+        text-align: center;
+        color: rgba(255, 255, 255, 0.4);
+        margin-top: 2rem;
+        font-size: 0.95rem;
+        font-style: italic;
+    }
+
+    /* === ESTILOS DA MATRIZ DINÂMICA === */
+    .matriz-container {
+        width: 100%;
+        overflow-x: auto;
+    }
+    
+    .matriz-horarios {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 4px;
+        color: #FFFFFF;
+        font-size: 0.9rem;
+    }
+    
+    .matriz-horarios th, .matriz-horarios td {
+        border-radius: 4px;
+        text-align: center;
+        padding: 0.8rem 0.4rem;
+        vertical-align: middle;
+        position: relative;
+    }
+    
+    .matriz-horarios th {
+        background-color: rgba(255, 255, 255, 0.05);
+        font-weight: 600;
+        color: #80D5C9;
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        letter-spacing: 1px;
+    }
+    
+    .celula-hora {
+        background-color: rgba(255, 255, 255, 0.05);
+        color: rgba(255, 255, 255, 0.9);
+        font-weight: 600;
+        width: 70px;
+        border-right: 2px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .celula-matriz {
+        background-color: rgba(255, 255, 255, 0.02);
+        transition: all 0.2s ease;
+    }
+
+    /* Status Cores */
+    .celula-vaga {
+        background-color: rgba(128, 213, 201, 0.15); 
+        color: #80D5C9;
+        cursor: pointer;
+        font-weight: 600;
+        border: 1px solid rgba(128, 213, 201, 0.3);
+    }
+    .celula-vaga:hover {
+        background-color: rgba(128, 213, 201, 0.3);
+        transform: scale(1.02);
+    }
+
+    .celula-lotada {
+        background-color: rgba(255, 107, 107, 0.15); 
+        color: #ff6b6b;
+        cursor: pointer;
+        font-weight: 600;
+        border: 1px solid rgba(255, 107, 107, 0.3);
+    }
+    .celula-lotada:hover {
+        background-color: rgba(255, 107, 107, 0.3);
+        transform: scale(1.02);
+    }
+    
+    /* Célula Clicada (Selecionada) */
+    .celula-selecionada {
+        background-color: #80D5C9 !important;
+        color: #001524 !important;
+        box-shadow: 0 0 10px rgba(128, 213, 201, 0.5);
+    }
+
+    /* Tooltip Customizado */
+    #tooltip-info {
+        position: absolute;
+        background-color: #002B49;
+        border: 1px solid #80D5C9;
+        padding: 0.8rem;
+        border-radius: 6px;
+        pointer-events: none;
+        z-index: 2000;
+        display: none;
+        color: #FFFFFF;
+        font-size: 0.85rem;
+        box-shadow: 0 8px 25px rgba(0,0,0,0.6);
+        min-width: 180px;
+    }
+    .tooltip-header { color: #80D5C9; font-weight: bold; margin-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 4px; }
+    .tooltip-linha { display: flex; justify-content: space-between; margin-top: 4px; }
+    .tooltip-val { font-weight: bold; }
+
+    /* Área Inferior (Botão Matrícula) */
+    .area-acao-inferior {
+        display: flex;
+        justify-content: center;
+        margin-top: 1.5rem;
+        min-height: 50px;
+    }
+
+    .btn-prosseguir {
+        display: none; /* Só aparece quando há seleção */
+        background-color: #80D5C9;
+        color: #002B49;
+        border: none;
+        padding: 0.8rem 3rem;
+        border-radius: 6px;
+        font-family: var(--fonte-principal);
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(128, 213, 201, 0.3);
+    }
+    .btn-prosseguir:hover { background-color: #ffffff; }
+
+    /* Modais Estilização */
+    .input-modal {
+        width: 100%;
+        padding: 0.8rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+        color: #FFFFFF;
+        font-family: var(--fonte-principal);
+        font-size: 0.9rem;
+        margin-bottom: 1rem;
+        box-sizing: border-box;
+    }
+    .input-modal:focus {
+        outline: none;
+        border-color: #ffb86c;
+    }
+    textarea.input-modal { resize: none; height: 80px; }
+
+    /* Estilos do Popup de Valores */
+    .modal-valores-content {
+        max-width: 600px !important;
+        text-align: left !important;
+    }
+    
+    .bloco-simulacao {
+        background-color: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        padding: 1.2rem;
+        margin-bottom: 1rem;
+    }
+    
+    .bloco-simulacao h3 {
+        margin: 0 0 0.5rem 0;
+        color: #80D5C9;
+        font-size: 1.1rem;
+        border-bottom: 1px dashed rgba(255,255,255,0.1);
+        padding-bottom: 0.5rem;
+    }
+
+    .bloco-simulacao .dias-selecionados {
+        font-size: 0.85rem;
+        color: rgba(255, 255, 255, 0.6);
+        margin-bottom: 1rem;
+    }
+
+    .grid-precos {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 1rem;
+    }
+
+    .box-preco {
+        background-color: rgba(0, 0, 0, 0.2);
+        padding: 0.8rem;
+        border-radius: 6px;
+        border-left: 3px solid #80D5C9;
+    }
+
+    .box-preco span.rotulo {
+        display: block;
+        font-size: 0.8rem;
+        color: rgba(255, 255, 255, 0.6);
+        text-transform: uppercase;
+        margin-bottom: 0.2rem;
+    }
+
+    .box-preco span.valor {
+        display: block;
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: #FFFFFF;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-vagas">
+    <a href="/" class="btn-fechar-form" title="Fechar">&times;</a>
+
+    <header class="header-pagina">
+        <h1>Quadro de Ocupação</h1>
+        <p>Selecione a atividade para visualizar a matriz e clique nos horários desejados.</p>
+    </header>
+
+    <div class="area-filtros">
+        <div class="form-grupo">
+            <label for="filtro_mod_display">Modalidade Desejada</label>
+            <div class="custom-select-wrapper" id="wrapper_filtro_mod">
+                <input type="text" id="filtro_mod_display" class="select-estilo-btn" readonly value="Clique para selecionar a atividade">
+                <input type="hidden" id="filtro_modalidade" value="">
+                
+                <div class="custom-select-options" id="options_filtro_mod">
+                    <div class="optgroup-label">GINÁSTICA</div>
+                    <div class="custom-option" data-value="Musculação">Musculação</div>
+                    <div class="custom-option" data-value="Treinamento Funcional">Treinamento Funcional</div>
+                    <div class="custom-option" data-value="HIIT">HIIT</div>
+                    <div class="custom-option" data-value="Spinning">Spinning</div>
+                    <div class="custom-option" data-value="Jump">Jump</div>
+                    <div class="custom-option" data-value="Fitdance / Zumba">Fitdance / Zumba</div>
+                    <div class="custom-option" data-value="Body Pump / Localizada / GAP">Body Pump / Localizada / GAP</div>
+                    <div class="custom-option" data-value="Step">Step</div>
+                    <div class="custom-option" data-value="Yoga">Yoga</div>
+                    <div class="custom-option" data-value="Pilates">Pilates</div>
+                    <div class="custom-option" data-value="Lutas Fitness">Lutas Fitness</div>
+                    <div class="custom-option" data-value="Cross Training">Cross Training</div>
+                    <div class="optgroup-label">PISCINA</div>
+                    <div class="custom-option" data-value="Natação Bebê">Natação Bebê</div>
+                    <div class="custom-option" data-value="Natação Infantil">Natação Infantil</div>
+                    <div class="custom-option" data-value="Natação Adulto">Natação Adulto</div>
+                    <div class="custom-option" data-value="Natação Competição">Natação Competição</div>
+                    <div class="custom-option" data-value="Hidroginástica">Hidroginástica</div>
+                    <div class="custom-option" data-value="Hidroterapia">Hidroterapia</div>
+                    <div class="custom-option" data-value="Hidrobike">Hidrobike</div>
+                    <div class="custom-option" data-value="Hidro Jump">Hidro Jump</div>
+                    <div class="custom-option" data-value="Deep Running">Deep Running</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Container da Matriz -->
+    <div class="area-resultados" id="lista_resultados">
+        <div class="msg-vazio">Selecione uma atividade acima para carregar a grade.</div>
+    </div>
+
+    <!-- Div Flutuante para Tooltip -->
+    <div id="tooltip-info"></div>
+
+    <!-- Área Inferior do Botão -->
+    <div class="area-acao-inferior">
+        <button type="button" id="btnMatricula" class="btn-prosseguir">
+            Matrícula <span id="contadorSelecao"></span>
+        </button>
+    </div>
+</div>
+
+<!-- MODAL: SIMULADOR DE VALORES E CONFIRMAÇÃO -->
+<div id="modalValores" class="modal-overlay">
+    <div class="modal-content modal-valores-content">
+        <button type="button" class="btn-fechar fechar-modal-valores">&times;</button>
+        <h2 class="modal-title" style="margin-bottom: 0.5rem; color: #80D5C9; text-align: left;">Resumo de Valores</h2>
+        <p style="text-align: left; color: rgba(255,255,255,0.7); font-size: 0.85rem; margin-bottom: 1.5rem; margin-top:0;">
+            Apresente as opções de planos com base nos horários selecionados.
+        </p>
+        
+        <div id="containerSimuladorPrecos" style="max-height: 400px; overflow-y: auto; padding-right: 5px;">
+            <!-- Blocos de preços injetados via JS -->
+            <div style="text-align: center; color: rgba(255,255,255,0.5);">Calculando valores...</div>
+        </div>
+        
+        <div style="margin-top: 1.5rem; text-align: right; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.5rem;">
+            <button type="button" id="btnAvancarCadastro" class="btn-acao" style="margin: 0; width: max-content; padding: 0.8rem 2rem;">
+                Avançar para Cadastro <i class="fas fa-arrow-right" style="margin-left: 5px;"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: LISTA DE ESPERA -->
+<div id="modalListaEspera" class="modal-overlay">
+    <div class="modal-content" style="max-width: 400px; text-align: left;">
+        <button type="button" class="btn-fechar fechar-modal-espera">&times;</button>
+        <h2 class="modal-title" style="margin-bottom: 0.5rem; color: #ffb86c; text-align: center;">Lista de Espera</h2>
+        <p id="subtitulo_espera" style="text-align: center; color: rgba(255,255,255,0.7); font-size: 0.85rem; margin-bottom: 1.5rem;"></p>
+        
+        <form id="formListaEspera">
+            <input type="hidden" id="espera_turma_id" name="turma_id">
+            
+            <label style="color: rgba(255,255,255,0.8); font-size: 0.85rem; margin-bottom: 0.2rem; display: block;">Nome do Interessado *</label>
+            <input type="text" name="nome_contato" class="input-modal" required placeholder="Ex: Maria da Silva">
+            
+            <label style="color: rgba(255,255,255,0.8); font-size: 0.85rem; margin-bottom: 0.2rem; display: block;">WhatsApp *</label>
+            <input type="text" id="espera_telefone" name="telefone" class="input-modal" required placeholder="(00) 00000-0000">
+            
+            <label style="color: rgba(255,255,255,0.8); font-size: 0.85rem; margin-bottom: 0.2rem; display: block;">E-mail (Opcional)</label>
+            <input type="email" name="email" class="input-modal" placeholder="exemplo@email.com">
+            
+            <label style="color: rgba(255,255,255,0.8); font-size: 0.85rem; margin-bottom: 0.2rem; display: block;">Observação</label>
+            <textarea name="observacao" class="input-modal" placeholder="Melhor horário para ligar, interesse de dias, etc."></textarea>
+            
+            <button type="submit" class="btn-acao" style="background-color: #ffb86c; color: #001524;">Gravar Lead na Fila</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        
+        // --- LÓGICA DE MEMÓRIA (CARRINHO INVISÍVEL) ---
+        let carrinho = [];
+
+        function adicionarSelecao(id, modalidade, dias, horario) {
+            if (!carrinho.find(item => item.id == id && item.dias == dias)) {
+                carrinho.push({ id, modalidade, dias, horario });
+                atualizarBotaoMatricula();
+            }
+        }
+
+        function removerSelecao(id, dias) {
+            carrinho = carrinho.filter(item => !(item.id == id && item.dias == dias));
+            atualizarBotaoMatricula();
+        }
+
+        function atualizarBotaoMatricula() {
+            const btn = document.getElementById('btnMatricula');
+            const span = document.getElementById('contadorSelecao');
+            if (carrinho.length > 0) {
+                btn.style.display = 'inline-block';
+                span.textContent = `(${carrinho.length})`;
+            } else {
+                btn.style.display = 'none';
+            }
+        }
+
+        // --- LÓGICA DO SELECT CUSTOMIZADO COM BUSCA AUTOMÁTICA ---
+        function setupCustomSelect(wrapperId, displayId, inputId, optionsId) {
+            const wrapper = document.getElementById(wrapperId);
+            const display = document.getElementById(displayId);
+            const input = document.getElementById(inputId);
+            const optionsContainer = document.getElementById(optionsId);
+
+            display.addEventListener('click', function(e) {
+                e.stopPropagation(); 
+                optionsContainer.classList.toggle('show');
+            });
+
+            document.addEventListener('click', function(e) {
+                if (!wrapper.contains(e.target)) {
+                    optionsContainer.classList.remove('show');
+                }
+            });
+
+            optionsContainer.addEventListener('click', function(e) {
+                if (e.target.classList.contains('custom-option')) {
+                    const modSelecionada = e.target.getAttribute('data-value');
+                    display.value = e.target.textContent;
+                    input.value = modSelecionada;
+                    optionsContainer.classList.remove('show');
+                    
+                    // Dispara a busca automaticamente
+                    buscarGrade(modSelecionada);
+                }
+            });
+        }
+        setupCustomSelect('wrapper_filtro_mod', 'filtro_mod_display', 'filtro_modalidade', 'options_filtro_mod');
+
+        // --- LÓGICA DA MATRIZ DINÂMICA DE HORÁRIOS ---
+        const listaResultados = document.getElementById('lista_resultados');
+        const tooltipInfo = document.getElementById('tooltip-info');
+
+        const diasSemanaOrdem = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+        const diasLabel = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
+
+        function buscarGrade(modalidadeFiltro) {
+            listaResultados.innerHTML = '<div class="msg-vazio">Analisando mapa de ocupação...</div>';
+
+            fetch(`/api/turmas/buscar?modalidade=${encodeURIComponent(modalidadeFiltro)}`)
+                .then(response => response.json())
+                .then(data => {
+                    listaResultados.innerHTML = '';
+                    
+                    if(!data.sucesso || data.turmas.length === 0) {
+                        listaResultados.innerHTML = '<div class="msg-vazio">Não existem turmas ativas cadastradas para esta modalidade.</div>';
+                        return;
+                    }
+
+                    const matriz = {}; 
+                    const horasSet = new Set();
+
+                    data.turmas.forEach(turma => {
+                        let dias = turma.dias_semana.split('-');
+                        let hr = turma.horario;
+                        
+                        horasSet.add(hr);
+                        if (!matriz[hr]) matriz[hr] = {};
+                        
+                        dias.forEach(d => {
+                            matriz[hr][d] = turma; 
+                        });
+                    });
+
+                    const horasOrdenadas = Array.from(horasSet).sort(); 
+
+                    let htmlMatriz = `
+                        <div class="matriz-container">
+                            <table class="matriz-horarios">
+                                <thead>
+                                    <tr>
+                                        <th>Hora</th>`;
+                    
+                    diasSemanaOrdem.forEach((sigla, idx) => {
+                        htmlMatriz += `<th>${diasLabel[idx]}</th>`;
+                    });
+                    htmlMatriz += `</tr></thead><tbody>`;
+
+                    horasOrdenadas.forEach(hora => {
+                        htmlMatriz += `<tr><td class="celula-hora">${hora}</td>`;
+                        
+                        diasSemanaOrdem.forEach(dia => {
+                            const turmaDia = matriz[hora][dia];
+                            
+                            if (turmaDia) {
+                                const isLotada = turmaDia.lotada;
+                                const classeBase = isLotada ? 'celula-lotada' : 'celula-vaga';
+                                const classeAcao = 'celula-acao';
+                                const icone = isLotada ? '<i class="fas fa-times-circle"></i>' : '<i class="fas fa-check-circle"></i>';
+                                
+                                // Verifica se já está selecionada em memória
+                                const isSelecionada = carrinho.find(c => c.id == turmaDia.id && c.dias == dia) ? 'celula-selecionada' : '';
+                                
+                                const vagasOcupadas = turmaDia.capacidade - turmaDia.vagas_livres;
+                                
+                                htmlMatriz += `
+                                    <td class="celula-matriz ${classeBase} ${classeAcao} ${isSelecionada}" 
+                                        data-id="${turmaDia.id}" 
+                                        data-modalidade="${turmaDia.modalidade}" 
+                                        data-dia="${dia}" 
+                                        data-horario="${hora}"
+                                        data-lotada="${isLotada}"
+                                        data-prof="Prof. ${turmaDia.professor}"
+                                        data-ocupacao="${vagasOcupadas} / ${turmaDia.capacidade}">
+                                        ${icone}
+                                    </td>`;
+                            } else {
+                                htmlMatriz += `<td class="celula-matriz"></td>`;
+                            }
+                        });
+                        htmlMatriz += `</tr>`;
+                    });
+
+                    htmlMatriz += `</tbody></table></div>`;
+                    listaResultados.innerHTML = htmlMatriz;
+                    
+                    vincularEventosMatriz();
+                })
+                .catch(error => {
+                    console.error("Erro na busca:", error);
+                    listaResultados.innerHTML = '<div class="msg-vazio">Erro de conexão ao buscar mapa de ocupação.</div>';
+                });
+        }
+
+        // --- CONTROLE DE INTERAÇÃO DA GRADE (TOOLTIP E CLIQUE) ---
+        function vincularEventosMatriz() {
+            const celulasAcao = document.querySelectorAll('.celula-acao');
+
+            celulasAcao.forEach(celula => {
+                celula.addEventListener('mousemove', function(e) {
+                    const prof = this.getAttribute('data-prof');
+                    const ocupacao = this.getAttribute('data-ocupacao');
+                    const modalidade = this.getAttribute('data-modalidade');
+                    
+                    tooltipInfo.innerHTML = `
+                        <div class="tooltip-header">${modalidade}</div>
+                        <div class="tooltip-linha"><span>Resp:</span> <span class="tooltip-val">${prof}</span></div>
+                        <div class="tooltip-linha"><span>Ocupação:</span> <span class="tooltip-val">${ocupacao}</span></div>
+                    `;
+                    
+                    tooltipInfo.style.display = 'block';
+                    tooltipInfo.style.left = (e.pageX + 15) + 'px';
+                    tooltipInfo.style.top = (e.pageY + 15) + 'px';
+                });
+
+                celula.addEventListener('mouseleave', function() {
+                    tooltipInfo.style.display = 'none';
+                });
+
+                celula.addEventListener('click', function() {
+                    tooltipInfo.style.display = 'none'; 
+                    
+                    const isLotada = this.getAttribute('data-lotada') === 'true';
+                    const id = this.getAttribute('data-id');
+                    const mod = this.getAttribute('data-modalidade');
+                    const dia = this.getAttribute('data-dia');
+                    const hr = this.getAttribute('data-horario');
+
+                    if (isLotada) {
+                        abrirModalEspera(id, mod, dia, hr);
+                    } else {
+                        if (this.classList.contains('celula-selecionada')) {
+                            this.classList.remove('celula-selecionada');
+                            removerSelecao(id, dia);
+                        } else {
+                            this.classList.add('celula-selecionada');
+                            adicionarSelecao(id, mod, dia, hr);
+                        }
+                    }
+                });
+            });
+        }
+
+        // --- MODAL SIMULADOR DE VALORES E MATRÍCULA ---
+        const modalValores = document.getElementById('modalValores');
+        const btnFecharValores = document.querySelector('.fechar-modal-valores');
+        const containerSimulador = document.getElementById('containerSimuladorPrecos');
+        
+        document.getElementById('btnMatricula').addEventListener('click', function() {
+            if (carrinho.length === 0) return;
+            modalValores.style.display = 'flex';
+            renderizarResumoValores();
+        });
+
+        btnFecharValores.addEventListener('click', () => { modalValores.style.display = 'none'; });
+
+        function formatarBr(valorStr) {
+            if (!valorStr || valorStr === "0.00" || valorStr === "0") return "R$ 0,00";
+            return "R$ " + parseFloat(valorStr).toFixed(2).replace('.', ',');
+        }
+
+        function renderizarResumoValores() {
+            containerSimulador.innerHTML = '<div style="text-align: center; color: rgba(255,255,255,0.5);">Buscando valores na tabela de preços...</div>';
+            
+            // Agrupar itens por modalidade
+            const grupos = {};
+            carrinho.forEach(item => {
+                if (!grupos[item.modalidade]) {
+                    grupos[item.modalidade] = { diasSelecionados: [], infoExibicao: [] };
+                }
+                if (!grupos[item.modalidade].diasSelecionados.includes(item.dias)) {
+                    grupos[item.modalidade].diasSelecionados.push(item.dias);
+                }
+                grupos[item.modalidade].infoExibicao.push(`${item.dias} às ${item.horario}`);
+            });
+
+            // Disparar requisições para a API de Preços
+            const promessas = Object.keys(grupos).map(mod => {
+                return fetch(`/api/precos/buscar?modalidade=${encodeURIComponent(mod)}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        grupos[mod].precosBanco = (data.sucesso && data.precos) ? data.precos : [];
+                    })
+                    .catch(err => {
+                        console.error("Erro API Preços:", err);
+                        grupos[mod].precosBanco = [];
+                    });
+            });
+
+            Promise.all(promessas).then(() => {
+                let htmlFinal = '';
+
+                Object.keys(grupos).forEach(mod => {
+                    const info = grupos[mod];
+                    const isMusculacao = (mod === "Musculação");
+                    
+                    // Conta quantos dias únicos a pessoa vai frequentar essa atividade
+                    const freqCalculada = info.diasSelecionados.length;
+                    
+                    // Identifica qual frequência puxar da tabela
+                    let frequenciaBusca = freqCalculada;
+                    if (isMusculacao) frequenciaBusca = 99; // 99 é a chave do banco para Freq Livre
+                    else if (frequenciaBusca > 3) frequenciaBusca = 4; // 4 é a chave para "Mais vezes"
+
+                    // Busca o objeto de preço correspondente
+                    const precoObj = info.precosBanco.find(p => parseInt(p.frequencia) === frequenciaBusca);
+
+                    htmlFinal += `
+                        <div class="bloco-simulacao">
+                            <h3>${mod}</h3>
+                            <div class="dias-selecionados">
+                                <i class="fas fa-calendar-check" style="margin-right: 5px;"></i> ${info.infoExibicao.join(' | ')}
+                            </div>
+                    `;
+
+                    if (precoObj) {
+                        htmlFinal += `
+                            <div class="grid-precos">
+                                <div class="box-preco">
+                                    <span class="rotulo">Mensal</span>
+                                    <span class="valor">${formatarBr(precoObj.mensal)}</span>
+                                </div>
+                                <div class="box-preco">
+                                    <span class="rotulo">Trimestral / mês</span>
+                                    <span class="valor">${formatarBr(precoObj.trimestral)}</span>
+                                </div>
+                                <div class="box-preco">
+                                    <span class="rotulo">Semestral / mês</span>
+                                    <span class="valor">${formatarBr(precoObj.semestral)}</span>
+                                </div>
+                                <div class="box-preco">
+                                    <span class="rotulo">Anual / mês</span>
+                                    <span class="valor">${formatarBr(precoObj.anual)}</span>
+                                </div>
+                            </div>
+                        </div>`;
+                    } else {
+                        htmlFinal += `<div style="color:#ffb86c; font-size:0.85rem;"><em>* Valores não cadastrados para esta frequência.</em></div></div>`;
+                    }
+                });
+
+                containerSimulador.innerHTML = htmlFinal;
+            });
+        }
+
+        // --- AVANÇAR PARA O PRÓXIMO PASSO DO FLUXO ---
+        document.getElementById('btnAvancarCadastro').addEventListener('click', function() {
+            // Salva as escolhas na memória para uso na tela de matrícula final
+            sessionStorage.setItem('mygym_carrinho_turmas', JSON.stringify(carrinho));
+            
+            // Redireciona provisoriamente para a tela existente de Matrículas
+            // NOTA: Conforme combinado, o fluxo exato dessa transição 
+            // será debatido no próximo brainstorm!
+            window.location.href = '/backoffice/matriculas/nova';
+        });
+
+        // --- MODAL DA LISTA DE ESPERA ---
+        const modalEspera = document.getElementById('modalListaEspera');
+        const btnFecharEspera = document.querySelector('.fechar-modal-espera');
+        const inputTelefoneEspera = document.getElementById('espera_telefone');
+        const formEspera = document.getElementById('formListaEspera');
+
+        if(inputTelefoneEspera) {
+            inputTelefoneEspera.addEventListener('input', function(e) {
+                if (typeof aplicarMascaraTelefone === 'function') {
+                    aplicarMascaraTelefone(e.target);
+                }
+            });
+        }
+
+        window.abrirModalEspera = function(turma_id, modalidade, dia, horario) {
+            document.getElementById('espera_turma_id').value = turma_id;
+            document.getElementById('subtitulo_espera').innerHTML = `<strong>${modalidade}</strong> <br> Vaga para ${dia} às ${horario}`;
+            formEspera.reset();
+            modalEspera.style.display = 'flex';
+        };
+
+        btnFecharEspera.addEventListener('click', () => { modalEspera.style.display = 'none'; });
+
+        formEspera.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const btnSubmit = this.querySelector('button[type="submit"]');
+            btnSubmit.textContent = 'Gravando...';
+            btnSubmit.disabled = true;
+
+            const formData = new FormData(this);
+            
+            fetch('/api/lista_espera/salvar', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                alert(data.msg);
+                if (data.sucesso) {
+                    modalEspera.style.display = 'none';
+                    // Recarrega a grade mantendo a modalidade
+                    const mod = document.getElementById('filtro_modalidade').value;
+                    buscarGrade(mod); 
+                }
+                btnSubmit.textContent = 'Gravar Lead na Fila';
+                btnSubmit.disabled = false;
+            })
+            .catch(error => {
+                console.error("Erro ao salvar lead:", error);
+                alert("Erro de conexão ao tentar salvar.");
+                btnSubmit.textContent = 'Gravar Lead na Fila';
+                btnSubmit.disabled = false;
+            });
+        });
+    });
+</script>
+{% endblock %}

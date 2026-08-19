@@ -48,6 +48,9 @@
 # 14/08/26: Implementação de lógica UPDATE na rota de salvar matrícula e suporte ao campo oculto matricula_id.
 # 14/08/26: Correção de parsing e formatação de horas (TIME) para evitar erro 1292 no MySQL ao atualizar grade de matrículas.
 # 17/08/26: Inclusão de disparo de e-mail transacional de confirmação na rota de salvamento de matrículas (correção da query de e-mail do aluno).
+# 18/08/26: Inclusão das rotas de Gestão de Turmas (nova, salvar e API de busca de professores por modalidade).
+# 18/08/26: Inclusão das rotas do Quadro de Vagas e salvamento de Lista de Espera.
+# 19/08/26: Inclusão das rotas de gestão da Tabela de Preços (nova, buscar e salvar).
 # ==============================================================================
 
 import os
@@ -777,7 +780,6 @@ def buscar_aluno():
         try:
             cursor = conn.cursor()
             
-            # 1. Tentar buscar direto pelo ID do aluno ou CPF do aluno
             sql_aluno = """
                 SELECT id, usuario_id, responsavel_id, nome_completo, cpf, data_nascimento, 
                        sexo, email, telefone, foto_url, observacoes_medicas, 
@@ -792,7 +794,6 @@ def buscar_aluno():
             if aluno:
                 alunos_encontrados.append(aluno)
             else:
-                # 2. Se não achou, tentar buscar pelo CPF do Responsável
                 sql_resp = "SELECT id FROM responsaveis WHERE cpf = %s LIMIT 1"
                 cursor.execute(sql_resp, (termo_limpo,))
                 resp = cursor.fetchone()
@@ -811,7 +812,6 @@ def buscar_aluno():
             if not alunos_encontrados:
                 return jsonify({'encontrado': False, 'msg': 'Nenhum registro encontrado.'})
             
-            # Se houver múltiplos alunos (irmãos vinculados ao mesmo responsável)
             if len(alunos_encontrados) > 1:
                 lista_multiplos = []
                 for a in alunos_encontrados:
@@ -827,7 +827,6 @@ def buscar_aluno():
                     'alunos': lista_multiplos
                 })
             
-            # Se encontrou apenas um aluno
             aluno = alunos_encontrados[0]
             aluno_id = aluno[0]
             resp_id = aluno[2]
@@ -851,9 +850,6 @@ def buscar_aluno():
             contatos_rows = cursor.fetchall()
             contatos_lista = [{'nome_completo': row[0], 'telefone': row[1], 'tipo': row[2]} for row in contatos_rows]
             
-            # ==============================================================================
-            # Buscar dados da matrícula ativa e grade correspondente
-            # ==============================================================================
             cursor.execute("""
                 SELECT id, tipo_plano, data_inicio, data_fim, dia_vencimento, taxa_matricula, status 
                 FROM matriculas 
@@ -885,7 +881,6 @@ def buscar_aluno():
                 for grow in grade_rows:
                     horario_str = str(grow[2]) if grow[2] else ''
                     if horario_str:
-                        # Corrige formatação de tempo como '9:00:00' para '09:00' para evitar erro MySQL
                         partes = horario_str.split(':')
                         if len(partes) >= 2:
                             horario_str = f"{int(partes[0]):02d}:{partes[1]}"
@@ -1132,6 +1127,318 @@ def salvar_permissoes():
     return jsonify({'sucesso': False})
 
 # ==============================================================================
+# ROTAS DA TABELA DE PREÇOS
+# ==============================================================================
+
+@app.route('/backoffice/precos')
+@requer_permissao('mod_precos')
+def tabela_precos():
+    return render_template('backoffice/tabela_precos.html')
+
+@app.route('/api/precos/buscar', methods=['GET'])
+def buscar_precos():
+    modalidade = request.args.get('modalidade')
+    if not modalidade:
+        return jsonify({'sucesso': False, 'msg': 'Modalidade não informada.'})
+        
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            sql = """
+                SELECT frequencia_semanal, valor_mensal, valor_trimestral, valor_semestral, valor_anual 
+                FROM tabela_precos 
+                WHERE modalidade = %s
+            """
+            cursor.execute(sql, (modalidade,))
+            rows = cursor.fetchall()
+            
+            precos = []
+            for row in rows:
+                precos.append({
+                    'frequencia': row[0],
+                    'mensal': str(row[1]),
+                    'trimestral': str(row[2]),
+                    'semestral': str(row[3]),
+                    'anual': str(row[4])
+                })
+            
+            return jsonify({'sucesso': True, 'precos': precos})
+        except Exception as e:
+            print(f"Erro ao buscar tabela de preços: {e}")
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return jsonify({'sucesso': False, 'msg': 'Erro de conexão com o banco.'})
+
+@app.route('/backoffice/precos/salvar', methods=['POST'])
+@requer_permissao('mod_precos')
+def salvar_precos():
+    modalidade = request.form.get('modalidade')
+    
+    if not modalidade:
+        return redirect(url_for('tabela_precos'))
+        
+    frequencias = request.form.getlist('frequencia[]')
+    mensais = request.form.getlist('mensal[]')
+    trimestrais = request.form.getlist('trimestral[]')
+    semestrais = request.form.getlist('semestral[]')
+    anuais = request.form.getlist('anual[]')
+    
+    def limpar_moeda(valor_str):
+        if not valor_str:
+            return 0.00
+        v = str(valor_str).replace('R$', '').strip()
+        if ',' in v:
+            v = v.replace('.', '').replace(',', '.')
+        try:
+            return float(v)
+        except ValueError:
+            return 0.00
+
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            
+            for i in range(len(frequencias)):
+                freq = frequencias[i]
+                v_mensal = limpar_moeda(mensais[i]) if i < len(mensais) else 0.00
+                v_trimestral = limpar_moeda(trimestrais[i]) if i < len(trimestrais) else 0.00
+                v_semestral = limpar_moeda(semestrais[i]) if i < len(semestrais) else 0.00
+                v_anual = limpar_moeda(anuais[i]) if i < len(anuais) else 0.00
+                
+                sql = """
+                    INSERT INTO tabela_precos (modalidade, frequencia_semanal, valor_mensal, valor_trimestral, valor_semestral, valor_anual)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE 
+                        valor_mensal = VALUES(valor_mensal),
+                        valor_trimestral = VALUES(valor_trimestral),
+                        valor_semestral = VALUES(valor_semestral),
+                        valor_anual = VALUES(valor_anual)
+                """
+                cursor.execute(sql, (modalidade, freq, v_mensal, v_trimestral, v_semestral, v_anual))
+            
+            conn.commit()
+            print(f"Tabela de preços salva com sucesso para a modalidade: {modalidade}")
+        except Exception as e:
+            print(f"Erro ao salvar tabela de preços: {e}")
+            conn.rollback()
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return redirect(url_for('tabela_precos'))
+
+
+# ==============================================================================
+# ROTAS DE GESTÃO DE TURMAS (GRADE OFICIAL)
+# ==============================================================================
+
+@app.route('/backoffice/turmas/nova')
+@requer_permissao('mod_cad_turma')
+def nova_turma():
+    return render_template('backoffice/cadastro_turma.html')
+
+@app.route('/api/professores/por_modalidade', methods=['GET'])
+def buscar_professores_por_modalidade():
+    modalidade = request.args.get('modalidade')
+    if not modalidade:
+        return jsonify({'sucesso': False, 'msg': 'Modalidade não informada.'})
+        
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            
+            sql = """
+                SELECT p.id, f.nome_completo 
+                FROM professores p
+                JOIN funcionarios f ON p.funcionario_id = f.id
+                WHERE p.modalidades LIKE %s AND f.status = 'ativo'
+            """
+            
+            parametro_busca = f"%{modalidade}%"
+            cursor.execute(sql, (parametro_busca,))
+            rows = cursor.fetchall()
+            
+            professores = [{'id': row[0], 'nome_completo': row[1]} for row in rows]
+            
+            return jsonify({'sucesso': True, 'professores': professores})
+        except Exception as e:
+            print(f"Erro ao buscar professores por modalidade: {e}")
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return jsonify({'sucesso': False, 'msg': 'Erro de conexão com o banco.'})
+
+@app.route('/backoffice/turmas/salvar', methods=['POST'])
+@requer_permissao('mod_cad_turma')
+def salvar_turma():
+    turma_id = request.form.get('turma_id')
+    modalidade = request.form.get('modalidade')
+    professor_id = request.form.get('professor_id')
+    capacidade_maxima = request.form.get('capacidade_maxima')
+    horario = request.form.get('horario')
+    status = request.form.get('status')
+    
+    dias_selecionados = request.form.getlist('dias_semana[]')
+    dias_str = "-".join(dias_selecionados) if dias_selecionados else ""
+    
+    if horario and len(horario) == 5:
+        horario = f"{horario}:00"
+        
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            
+            if turma_id:
+                sql = """
+                    UPDATE turmas 
+                    SET modalidade=%s, professor_id=%s, dias_semana=%s, 
+                        horario=%s, capacidade_maxima=%s, status=%s
+                    WHERE id=%s
+                """
+                valores = (modalidade, professor_id, dias_str, horario, capacidade_maxima, status, turma_id)
+                cursor.execute(sql, valores)
+            else:
+                sql = """
+                    INSERT INTO turmas (modalidade, professor_id, dias_semana, horario, capacidade_maxima, status)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """
+                valores = (modalidade, professor_id, dias_str, horario, capacidade_maxima, status)
+                cursor.execute(sql, valores)
+                
+            conn.commit()
+            print(f"Turma de {modalidade} salva com sucesso!")
+        except Exception as e:
+            print(f"Erro ao salvar turma no banco: {e}")
+            conn.rollback()
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return redirect(url_for('nova_turma'))
+
+# ==============================================================================
+# ROTAS DO QUADRO DE VAGAS E LISTA DE ESPERA
+# ==============================================================================
+
+@app.route('/backoffice/vagas')
+@requer_permissao('mod_grade')
+def quadro_vagas():
+    return render_template('backoffice/quadro_vagas.html')
+
+@app.route('/api/turmas/buscar', methods=['GET'])
+def api_buscar_turmas_vagas():
+    dia_filtro = request.args.get('dia', '').strip()
+    mod_filtro = request.args.get('modalidade', '').strip()
+    
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            
+            sql = """
+                SELECT t.id, t.modalidade, t.dias_semana, t.horario, t.capacidade_maxima, f.nome_completo
+                FROM turmas t
+                JOIN professores p ON t.professor_id = p.id
+                JOIN funcionarios f ON p.funcionario_id = f.id
+                WHERE t.status = 'Ativa'
+            """
+            parametros = []
+            
+            if mod_filtro:
+                sql += " AND t.modalidade = %s"
+                parametros.append(mod_filtro)
+                
+            if dia_filtro:
+                sql += " AND t.dias_semana LIKE %s"
+                parametros.append(f"%{dia_filtro}%")
+                
+            cursor.execute(sql, tuple(parametros))
+            turmas_rows = cursor.fetchall()
+            
+            lista_turmas = []
+            for row in turmas_rows:
+                turma_id = row[0]
+                modalidade = row[1]
+                dias_semana = row[2]
+                horario_raw = str(row[3])
+                capacidade = row[4]
+                professor = row[5]
+                
+                horario = horario_raw[:5] if len(horario_raw) >= 5 else horario_raw
+                
+                sql_vagas = """
+                    SELECT COUNT(mg.id) 
+                    FROM matricula_grade mg
+                    JOIN matriculas m ON mg.matricula_id = m.id
+                    WHERE mg.modalidade = %s AND mg.dias_semana = %s AND mg.horario LIKE %s AND m.status = 'Ativa'
+                """
+                cursor.execute(sql_vagas, (modalidade, dias_semana, f"%{horario}%"))
+                matriculados_count = cursor.fetchone()[0]
+                
+                vagas_livres = capacidade - matriculados_count
+                if vagas_livres < 0: 
+                    vagas_livres = 0
+                
+                lista_turmas.append({
+                    'id': turma_id,
+                    'modalidade': modalidade,
+                    'dias_semana': dias_semana,
+                    'horario': horario,
+                    'capacidade': capacidade,
+                    'matriculados': matriculados_count,
+                    'vagas_livres': vagas_livres,
+                    'lotada': vagas_livres == 0,
+                    'professor': professor
+                })
+                
+            return jsonify({'sucesso': True, 'turmas': lista_turmas})
+        except Exception as e:
+            print(f"Erro ao buscar turmas para o quadro de vagas: {e}")
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return jsonify({'sucesso': False, 'turmas': []})
+
+@app.route('/api/lista_espera/salvar', methods=['POST'])
+def salvar_lista_espera():
+    turma_id = request.form.get('turma_id')
+    nome_contato = request.form.get('nome_contato')
+    telefone = request.form.get('telefone')
+    email = request.form.get('email')
+    observacao = request.form.get('observacao')
+    
+    if telefone:
+        telefone = re.sub(r'\D', '', telefone)
+        
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            sql = """
+                INSERT INTO lista_espera (turma_id, nome_contato, telefone, email, observacao, status)
+                VALUES (%s, %s, %s, %s, %s, 'Aguardando')
+            """
+            cursor.execute(sql, (turma_id, nome_contato, telefone, email, observacao))
+            conn.commit()
+            return jsonify({'sucesso': True, 'msg': 'Lead adicionado com sucesso à lista de espera!'})
+        except Exception as e:
+            print(f"Erro ao salvar lista de espera: {e}")
+            conn.rollback()
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return jsonify({'sucesso': False, 'msg': 'Erro interno ao salvar.'})
+
+# ==============================================================================
 # ROTAS DE MATRÍCULAS
 # ==============================================================================
 
@@ -1220,18 +1527,14 @@ def salvar_matricula():
             cursor = conn.cursor()
             
             if matricula_id:
-                # --- UPDATE (Matrícula Existente) ---
                 sql_matricula = """
                     UPDATE matriculas 
                     SET tipo_plano=%s, data_inicio=%s, data_fim=%s, dia_vencimento=%s, taxa_matricula=%s 
                     WHERE id=%s
                 """
                 cursor.execute(sql_matricula, (tipo_plano, data_inicio, data_fim, dia_vencimento, taxa_matricula, matricula_id))
-                
-                # Deleta a grade antiga para inserir a nova
                 cursor.execute("DELETE FROM matricula_grade WHERE matricula_id = %s", (matricula_id,))
             else:
-                # --- INSERT (Nova Matrícula) ---
                 sql_matricula = """
                     INSERT INTO matriculas (aluno_id, tipo_plano, data_inicio, data_fim, dia_vencimento, taxa_matricula, status)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
@@ -1239,7 +1542,6 @@ def salvar_matricula():
                 cursor.execute(sql_matricula, (aluno_id, tipo_plano, data_inicio, data_fim, dia_vencimento, taxa_matricula, 'Ativa'))
                 matricula_id = cursor.lastrowid
             
-            # --- Gravação em lote da Grade ---
             modalidades = request.form.getlist('grade_modalidade[]')
             dias = request.form.getlist('grade_dias[]')
             horarios = request.form.getlist('grade_horario[]')
@@ -1252,7 +1554,6 @@ def salvar_matricula():
                 horario = horarios[i] if i < len(horarios) else ''
                 
                 if mod and dia and horario:
-                    # Segurança adicional: Garante que a string que vai pro MySQL esteja em formato HH:MM correto
                     partes = horario.split(':')
                     if len(partes) >= 2:
                         horario = f"{int(partes[0]):02d}:{partes[1]}"
@@ -1267,11 +1568,7 @@ def salvar_matricula():
             conn.commit()
             print(f"Matrícula {matricula_id} e grade salvas com sucesso para o Aluno {aluno_id}.")
             
-            # ==============================================================================
-            # ROTINA DE DISPARO DE E-MAIL TRANSACIONAL
-            # ==============================================================================
             try:
-                # Busca os dados do aluno para envio (ajustado para consultar diretamente a tabela alunos)
                 sql_aluno_email = """
                     SELECT a.nome_completo, a.email
                     FROM alunos a
@@ -1285,13 +1582,11 @@ def salvar_matricula():
                     email_destino = aluno_row[1]
                     
                     if email_destino:
-                        # Formata a data de YYYY-MM-DD para DD/MM/YYYY para exibição
                         try:
                             data_inicio_formatada = datetime.strptime(data_inicio, '%Y-%m-%d').strftime('%d/%m/%Y')
                         except:
                             data_inicio_formatada = data_inicio
                             
-                        # Renderiza o template HTML do e-mail com os dados
                         html_corpo = render_template(
                             'emails/matricula_confirmada.html',
                             nome_aluno=nome_aluno,
@@ -1300,7 +1595,6 @@ def salvar_matricula():
                             grade=lista_grade_email
                         )
                         
-                        # Dispara o e-mail de forma silenciosa
                         enviou = enviar_email_html(
                             destinatario=email_destino,
                             assunto="Sua Matrícula no MyGym foi confirmada! 🏊‍♂️",
@@ -1308,8 +1602,6 @@ def salvar_matricula():
                         )
                         if enviou:
                             print(f"E-mail de confirmação enviado para {email_destino}")
-                    else:
-                        print("E-mail não enviado: O aluno não possui endereço de e-mail cadastrado.")
             except Exception as e_email:
                 print(f"Erro na rotina de envio de e-mail: {e_email}")
                 

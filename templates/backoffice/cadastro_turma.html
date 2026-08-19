@@ -1,0 +1,522 @@
+{# 
+==============================================================================
+PROJETO: MyGym
+MÓDULO: templates/backoffice/cadastro_turma.html
+DATA DE CRIAÇÃO: 18/08/26
+TÍTULO: Gestão de Turmas / Grade Oficial
+FUNÇÃO: Interface para criação e edição das turmas, associando modalidade, 
+        professor habilitado, dias da semana, horário e capacidade.
+
+HISTÓRICO DE ALTERAÇÕES:
+18/08/26: Criação inicial do módulo com busca dinâmica de professores por modalidade e controle inteligente de estado.
+18/08/26: Ajuste de nomenclatura no campo de capacidade e melhoria na visibilidade do ícone do input de horário.
+18/08/26: Sincronização exata da lista de atividades com o componente modal_modalidades.html, organizada por grupos.
+18/08/26: Refatoração visual (Custom Select) para alinhar a UI dos Dropdowns à identidade Dark/Teal do Design System.
+18/08/26: Inclusão da navegação global via tecla Enter atuando como Tab.
+============================================================================== 
+#}
+
+{% extends "base.html" %}
+
+{% block head %}
+<style>
+    .container-cadastro {
+        background-color: #001524;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 2.5rem 3rem;
+        border-radius: 8px;
+        width: 100%;
+        max-width: 700px;
+        box-shadow: 0px 15px 35px rgba(0, 0, 0, 0.5);
+        color: #FFFFFF;
+        box-sizing: border-box;
+        position: relative;
+    }
+
+    .btn-fechar-form {
+        position: absolute;
+        top: 1rem;
+        right: 1.5rem;
+        font-size: 1.8rem;
+        color: #FFFFFF;
+        text-decoration: none;
+        opacity: 0.6;
+        transition: opacity 0.3s ease;
+        line-height: 1;
+    }
+
+    .btn-fechar-form:hover {
+        opacity: 1;
+    }
+
+    .header-pagina {
+        text-align: left;
+        margin-bottom: 2rem;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        padding-bottom: 1rem;
+    }
+
+    .header-pagina h1 {
+        font-size: 1.8rem;
+        font-weight: 600;
+        margin: 0;
+        letter-spacing: 1px;
+        color: #80D5C9;
+    }
+
+    .form-linha {
+        display: flex;
+        gap: 1.5rem;
+        margin-bottom: 1.2rem;
+    }
+
+    .form-grupo {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-grupo label {
+        margin-bottom: 0.4rem;
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    .input-limpo, .select-estilo-btn {
+        width: 100%;
+        padding: 0.9rem 1rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+        color: #FFFFFF;
+        font-family: var(--fonte-principal);
+        font-size: 1rem;
+        box-sizing: border-box;
+        transition: all 0.3s ease;
+    }
+
+    /* === CUSTOM SELECT (Substituição da tag <select> nativa) === */
+    .custom-select-wrapper {
+        position: relative;
+        width: 100%;
+    }
+
+    .select-estilo-btn {
+        background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+        background-repeat: no-repeat;
+        background-position: right 1rem top 50%;
+        background-size: 0.65rem auto;
+        cursor: pointer;
+    }
+
+    .input-limpo:focus, .select-estilo-btn:focus {
+        outline: none;
+        border-color: #80D5C9;
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .input-limpo:disabled, .select-estilo-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+
+    .custom-select-options {
+        display: none;
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        width: 100%;
+        background-color: #001524; 
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 6px;
+        z-index: 1000;
+        max-height: 250px;
+        overflow-y: auto;
+        box-shadow: 0px 15px 35px rgba(0, 0, 0, 0.5);
+        padding: 0.5rem 0;
+    }
+
+    .custom-select-options.show {
+        display: block;
+    }
+
+    .optgroup-label {
+        color: #80D5C9; 
+        font-size: 0.85rem;
+        font-weight: 600;
+        padding: 0.5rem 1.2rem;
+        margin-top: 0.5rem;
+        border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .optgroup-label:first-child {
+        margin-top: 0;
+    }
+
+    .custom-option {
+        padding: 0.6rem 1.2rem 0.6rem 2rem;
+        color: rgba(255, 255, 255, 0.85);
+        cursor: pointer;
+        transition: all 0.2s ease;
+        font-size: 0.95rem;
+    }
+
+    .custom-option:hover {
+        background-color: rgba(255, 255, 255, 0.1);
+        color: #80D5C9;
+        padding-left: 2.2rem; 
+    }
+    
+    .custom-select-options::-webkit-scrollbar { width: 8px; }
+    .custom-select-options::-webkit-scrollbar-track { background: rgba(255, 255, 255, 0.02); }
+    .custom-select-options::-webkit-scrollbar-thumb { background: rgba(128, 213, 201, 0.3); border-radius: 4px; }
+    .custom-select-options::-webkit-scrollbar-thumb:hover { background: rgba(128, 213, 201, 0.6); }
+
+    .input-limpo::-webkit-calendar-picker-indicator,
+    .input-limpo::-webkit-time-picker-indicator {
+        filter: invert(1) brightness(1.5) opacity(0.9);
+        cursor: pointer;
+    }
+
+    .checkbox-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        padding: 0.5rem 0;
+    }
+
+    .checkbox-label {
+        display: flex;
+        align-items: center;
+        gap: 0.4rem;
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.8);
+        cursor: pointer;
+    }
+
+    .checkbox-label input[type="checkbox"] {
+        accent-color: #80D5C9;
+        transform: scale(1.2);
+        cursor: pointer;
+    }
+
+    .form-acoes {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+
+    .btn-custom {
+        padding: 0.9rem 2.5rem;
+        border-radius: 6px;
+        font-family: var(--fonte-principal);
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        text-decoration: none;
+        text-align: center;
+        transition: all 0.3s ease;
+        border: none;
+    }
+
+    .btn-salvar {
+        background-color: #80D5C9;
+        color: #002B49;
+    }
+
+    .btn-salvar:disabled {
+        background-color: rgba(255, 255, 255, 0.1);
+        color: rgba(255, 255, 255, 0.3);
+        cursor: not-allowed;
+    }
+
+    .btn-salvar:not(:disabled):hover {
+        background-color: #ffffff;
+    }
+
+    .btn-cancelar {
+        background-color: transparent;
+        color: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-cancelar:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+        color: #FFFFFF;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-cadastro">
+    <a href="/" class="btn-fechar-form" title="Fechar">&times;</a>
+
+    <header class="header-pagina">
+        <h1>Gestão de Turmas</h1>
+    </header>
+
+    <form id="formTurma" action="/backoffice/turmas/salvar" method="POST">
+        <input type="hidden" id="turma_id" name="turma_id" value="">
+
+        <div class="form-linha">
+            <div class="form-grupo">
+                <label for="modalidade_display">Modalidade *</label>
+                <!-- CUSTOM SELECT MODALIDADE -->
+                <div class="custom-select-wrapper" id="wrapper_modalidade">
+                    <input type="text" id="modalidade_display" class="select-estilo-btn" readonly placeholder="Selecione a Modalidade..." required>
+                    <input type="hidden" id="modalidade" name="modalidade" class="campo-validavel">
+                    <div class="custom-select-options" id="options_modalidade">
+                        <div class="optgroup-label">GINÁSTICA / SALA</div>
+                        <div class="custom-option" data-value="Musculação">Musculação</div>
+                        <div class="custom-option" data-value="Treinamento Funcional">Treinamento Funcional</div>
+                        <div class="custom-option" data-value="HIIT">HIIT</div>
+                        <div class="custom-option" data-value="Spinning">Spinning</div>
+                        <div class="custom-option" data-value="Jump">Jump</div>
+                        <div class="custom-option" data-value="Fitdance / Zumba">Fitdance / Zumba</div>
+                        <div class="custom-option" data-value="Body Pump / Localizada / GAP">Body Pump / Localizada / GAP</div>
+                        <div class="custom-option" data-value="Step">Step</div>
+                        <div class="custom-option" data-value="Yoga">Yoga</div>
+                        <div class="custom-option" data-value="Pilates">Pilates</div>
+                        <div class="custom-option" data-value="Lutas Fitness">Lutas Fitness</div>
+                        <div class="custom-option" data-value="Cross Training">Cross Training</div>
+                        
+                        <div class="optgroup-label">PISCINA</div>
+                        <div class="custom-option" data-value="Natação Bebê">Natação Bebê</div>
+                        <div class="custom-option" data-value="Natação Infantil">Natação Infantil</div>
+                        <div class="custom-option" data-value="Natação Adulto">Natação Adulto</div>
+                        <div class="custom-option" data-value="Natação Competição">Natação Competição</div>
+                        <div class="custom-option" data-value="Hidroginástica">Hidroginástica</div>
+                        <div class="custom-option" data-value="Hidroterapia">Hidroterapia</div>
+                        <div class="custom-option" data-value="Hidrobike">Hidrobike</div>
+                        <div class="custom-option" data-value="Hidro Jump">Hidro Jump</div>
+                        <div class="custom-option" data-value="Deep Running">Deep Running</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-grupo">
+                <label for="professor_display">Professor Responsável *</label>
+                <!-- CUSTOM SELECT PROFESSOR -->
+                <div class="custom-select-wrapper" id="wrapper_professor">
+                    <input type="text" id="professor_display" class="select-estilo-btn" readonly placeholder="Selecione a Modalidade primeiro" required disabled>
+                    <input type="hidden" id="professor_id" name="professor_id" class="campo-validavel">
+                    <div class="custom-select-options" id="options_professor">
+                        <!-- Opções injetadas via AJAX -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-linha">
+            <div class="form-grupo">
+                <label for="capacidade_maxima">Capacidade *</label>
+                <input type="number" id="capacidade_maxima" name="capacidade_maxima" class="input-limpo campo-validavel" min="1" placeholder="Ex: 10" required>
+            </div>
+
+            <div class="form-grupo">
+                <label for="horario">Horário de Início *</label>
+                <input type="time" id="horario" name="horario" class="input-limpo campo-validavel" required>
+            </div>
+
+            <div class="form-grupo">
+                <label for="status_display">Status</label>
+                <!-- CUSTOM SELECT STATUS -->
+                <div class="custom-select-wrapper" id="wrapper_status">
+                    <input type="text" id="status_display" class="select-estilo-btn" readonly value="Ativa" required>
+                    <input type="hidden" id="status" name="status" value="Ativa" class="campo-validavel">
+                    <div class="custom-select-options" id="options_status">
+                        <div class="custom-option" data-value="Ativa">Ativa</div>
+                        <div class="custom-option" data-value="Inativa">Inativa</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-grupo" style="margin-bottom: 1.5rem;">
+            <label>Dias da Semana *</label>
+            <div class="checkbox-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="dias_semana[]" value="Seg" class="chk-dia"> Segunda
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" name="dias_semana[]" value="Ter" class="chk-dia"> Terça
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" name="dias_semana[]" value="Qua" class="chk-dia"> Quarta
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" name="dias_semana[]" value="Qui" class="chk-dia"> Quinta
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" name="dias_semana[]" value="Sex" class="chk-dia"> Sexta
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" name="dias_semana[]" value="Sáb" class="chk-dia"> Sábado
+                </label>
+                <label class="checkbox-label">
+                    <input type="checkbox" name="dias_semana[]" value="Dom" class="chk-dia"> Domingo
+                </label>
+            </div>
+        </div>
+
+        <div class="form-acoes">
+            <a href="/" class="btn-custom btn-cancelar">Cancelar</a>
+            <button type="submit" id="btnSalvar" class="btn-custom btn-salvar">Salvar</button>
+        </div>
+    </form>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const form = document.getElementById("formTurma");
+        const btnSalvar = document.getElementById("btnSalvar");
+        const chkDias = document.querySelectorAll(".chk-dia");
+
+        // === SETUP DOS CUSTOM SELECTS ===
+        function setupCustomSelect(wrapperId, displayId, inputId, optionsId) {
+            const wrapper = document.getElementById(wrapperId);
+            const display = document.getElementById(displayId);
+            const input = document.getElementById(inputId);
+            const optionsContainer = document.getElementById(optionsId);
+
+            display.addEventListener('click', function(e) {
+                e.stopPropagation(); 
+                if(display.disabled) return;
+                
+                document.querySelectorAll('.custom-select-options.show').forEach(el => {
+                    if(el !== optionsContainer) el.classList.remove('show');
+                });
+                
+                optionsContainer.classList.toggle('show');
+            });
+
+            optionsContainer.addEventListener('click', function(e) {
+                if (e.target.classList.contains('custom-option')) {
+                    display.value = e.target.textContent;
+                    input.value = e.target.getAttribute('data-value');
+                    optionsContainer.classList.remove('show');
+                    
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+
+            document.addEventListener('click', function(e) {
+                if (!wrapper.contains(e.target)) {
+                    optionsContainer.classList.remove('show');
+                }
+            });
+        }
+
+        setupCustomSelect('wrapper_modalidade', 'modalidade_display', 'modalidade', 'options_modalidade');
+        setupCustomSelect('wrapper_professor', 'professor_display', 'professor_id', 'options_professor');
+        setupCustomSelect('wrapper_status', 'status_display', 'status', 'options_status');
+
+        // === VALIDAÇÃO INTELIGENTE DO BOTÃO SALVAR ===
+        function validarFormulario() {
+            let valido = true;
+            
+            const camposParaValidar = form.querySelectorAll(".campo-validavel");
+            camposParaValidar.forEach(campo => {
+                if (campo.value.trim() === "") {
+                    valido = false;
+                }
+            });
+
+            let diaSelecionado = false;
+            chkDias.forEach(chk => {
+                if (chk.checked) diaSelecionado = true;
+            });
+            
+            if (!diaSelecionado) valido = false;
+
+            return valido;
+        }
+
+        let atualizarEstadoValidacao = null;
+        if (typeof monitorarAlteracoes === 'function') {
+            atualizarEstadoValidacao = monitorarAlteracoes('formTurma', 'btnSalvar', validarFormulario);
+        }
+
+        // === REQUISIÇÃO AJAX (PROFESSORES) ===
+        const inputModalidade = document.getElementById("modalidade");
+        const displayProfessor = document.getElementById("professor_display");
+        const inputProfessor = document.getElementById("professor_id");
+        const optionsProfessor = document.getElementById("options_professor");
+
+        inputModalidade.addEventListener("change", async function() {
+            const modalidadeSelecionada = this.value;
+            
+            displayProfessor.value = '';
+            optionsProfessor.innerHTML = '';
+            displayProfessor.disabled = true;
+            inputProfessor.value = ''; 
+
+            if (!modalidadeSelecionada) {
+                displayProfessor.placeholder = 'Selecione a Modalidade primeiro';
+                if (atualizarEstadoValidacao) atualizarEstadoValidacao();
+                return;
+            }
+
+            displayProfessor.placeholder = 'Carregando...';
+
+            try {
+                const response = await fetch(`/api/professores/por_modalidade?modalidade=${encodeURIComponent(modalidadeSelecionada)}`);
+                const data = await response.json();
+
+                if (data.sucesso && data.professores.length > 0) {
+                    displayProfessor.placeholder = 'Selecione o Professor...';
+                    
+                    data.professores.forEach(prof => {
+                        optionsProfessor.innerHTML += `<div class="custom-option" data-value="${prof.id}">${prof.nome_completo}</div>`;
+                    });
+                    displayProfessor.disabled = false;
+                } else {
+                    displayProfessor.placeholder = 'Nenhum professor habilitado';
+                }
+            } catch (error) {
+                console.error("Erro ao buscar professores:", error);
+                displayProfessor.placeholder = 'Erro na busca. Tente novamente.';
+            }
+
+            if (atualizarEstadoValidacao) atualizarEstadoValidacao();
+        });
+
+        chkDias.forEach(chk => {
+            chk.addEventListener("change", () => {
+                if (atualizarEstadoValidacao) atualizarEstadoValidacao();
+            });
+        });
+
+        // === NAVEGAÇÃO GLOBAL COM A TECLA ENTER (Enter como Tab) ===
+        form.addEventListener("keydown", function(e) {
+            if (e.key === "Enter") {
+                const target = e.target;
+                
+                // Ignora o comportamento caso o elemento focado seja um botão (permite salvar/cancelar)
+                if (target.tagName.toLowerCase() === 'button') return;
+                
+                e.preventDefault(); 
+                
+                // Mapeia todos os elementos focáveis
+                // Nota: incluímos os inputs 'readonly' que possuem a classe .select-estilo-btn 
+                // para garantir que a navegação não pule os Custom Selects
+                const focusableElements = Array.from(form.querySelectorAll(
+                    'input:not([type="hidden"]):not([disabled]):not([readonly]), ' +
+                    'input.select-estilo-btn:not([disabled]), ' +
+                    'input[type="checkbox"]:not([disabled]), ' +
+                    'button:not([disabled])'
+                ));
+                
+                const index = focusableElements.indexOf(target);
+                
+                if (index > -1 && index < focusableElements.length - 1) {
+                    focusableElements[index + 1].focus();
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

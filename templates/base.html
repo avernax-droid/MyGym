@@ -19,6 +19,9 @@ HISTÓRICO DE ALTERAÇÕES:
 04/08/26: Simplificação da barra de navegação: remoção de "Início"/"Sair" e reestruturação do Backoffice.
 04/08/26: Remoção de marcadores temporários '(*)' dos submenus do Backoffice.
 13/08/26: Atualização da rota do menu Matrícula para /backoffice/matriculas/nova.
+18/08/26: Inclusão da permissão mod_cad_turma e do link Gestão de Turmas no menu Backoffice.
+19/08/26: Inclusão do link para Quadro de Vagas e verificação da permissão mod_grade no menu Backoffice.
+19/08/26: Inclusão do link para Tabela de Preços e verificação da permissão mod_precos no menu Backoffice.
 ============================================================================== 
 #}
 
@@ -289,7 +292,7 @@ HISTÓRICO DE ALTERAÇÕES:
             {% set is_free = p.get('mod_free') %}
 
             {# BLOCO 1: BACKOFFICE #}
-            {% if is_free or p.get('mod_cad_func') or p.get('mod_cad_prof') or p.get('mod_cad_aluno') or p.get('mod_cad_perm') or p.get('mod_matricula') %}
+            {% if is_free or p.get('mod_cad_func') or p.get('mod_cad_prof') or p.get('mod_cad_aluno') or p.get('mod_cad_perm') or p.get('mod_matricula') or p.get('mod_cad_turma') or p.get('mod_grade') or p.get('mod_precos') %}
             <div class="dropdown">
                 <a href="javascript:void(0)">Backoffice <i class="fas fa-caret-down" style="font-size: 0.9em; margin-left: 4px;"></i></a>
                 <div class="dropdown-content">
@@ -305,6 +308,14 @@ HISTÓRICO DE ALTERAÇÕES:
                     {% if is_free or p.get('mod_cad_aluno') %}
                     <a href="/backoffice/alunos/novo">Cadastro Aluno</a>
                     {% endif %}
+
+                    {% if is_free or p.get('mod_cad_turma') %}
+                    <a href="/backoffice/turmas/nova">Gestão de Turmas</a>
+                    {% endif %}
+
+                    {% if is_free or p.get('mod_precos') %}
+                    <a href="/backoffice/precos">Tabela de Preços</a>
+                    {% endif %}
                     
                     {% if is_free or p.get('mod_cad_perm') %}
                     <a href="/backoffice/permissoes">Controles de Acesso</a>
@@ -312,6 +323,10 @@ HISTÓRICO DE ALTERAÇÕES:
                     
                     {% if is_free or p.get('mod_matricula') %}
                     <a href="/backoffice/matriculas/nova">Matrícula</a>
+                    {% endif %}
+
+                    {% if is_free or p.get('mod_grade') %}
+                    <a href="/backoffice/vagas">Quadro de Vagas</a>
                     {% endif %}
                 </div>
             </div>
