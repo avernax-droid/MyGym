@@ -51,6 +51,8 @@
 # 18/08/26: Inclusão das rotas de Gestão de Turmas (nova, salvar e API de busca de professores por modalidade).
 # 18/08/26: Inclusão das rotas do Quadro de Vagas e salvamento de Lista de Espera.
 # 19/08/26: Inclusão das rotas de gestão da Tabela de Preços (nova, buscar e salvar).
+# 21/08/26: Alteração na rota salvar_aluno para retornar JSON (Ponte Inteligente com Quadro de Vagas).
+# 21/08/26: Inclusão dos campos forma_pagamento e parcelas na API de busca de aluno e na persistência de matrículas.
 # ==============================================================================
 
 import os
@@ -851,7 +853,7 @@ def buscar_aluno():
             contatos_lista = [{'nome_completo': row[0], 'telefone': row[1], 'tipo': row[2]} for row in contatos_rows]
             
             cursor.execute("""
-                SELECT id, tipo_plano, data_inicio, data_fim, dia_vencimento, taxa_matricula, status 
+                SELECT id, tipo_plano, forma_pagamento, parcelas, data_inicio, data_fim, dia_vencimento, taxa_matricula, status 
                 FROM matriculas 
                 WHERE aluno_id = %s AND status = 'Ativa' 
                 ORDER BY id DESC LIMIT 1
@@ -864,11 +866,13 @@ def buscar_aluno():
                 matricula_data = {
                     'id': mat_id,
                     'tipo_plano': matricula_row[1],
-                    'data_inicio': str(matricula_row[2]) if matricula_row[2] else '',
-                    'data_fim': str(matricula_row[3]) if matricula_row[3] else '',
-                    'dia_vencimento': matricula_row[4],
-                    'taxa_matricula': str(matricula_row[5]) if matricula_row[5] else '',
-                    'status': matricula_row[6],
+                    'forma_pagamento': matricula_row[2] or '',
+                    'parcelas': matricula_row[3] or 1,
+                    'data_inicio': str(matricula_row[4]) if matricula_row[4] else '',
+                    'data_fim': str(matricula_row[5]) if matricula_row[5] else '',
+                    'dia_vencimento': matricula_row[6],
+                    'taxa_matricula': str(matricula_row[7]) if matricula_row[7] else '',
+                    'status': matricula_row[8],
                     'grade': []
                 }
                 
@@ -1049,11 +1053,20 @@ def salvar_aluno():
         except Exception as e:
             print(f"Erro ao salvar aluno no banco: {e}")
             conn.rollback()
+            if request.headers.get('Accept') == 'application/json' or request.headers.get('X-Requested-With') == 'XMLHttpRequest' or request.path.endswith('/salvar') and request.method == 'POST':
+                return jsonify({'sucesso': False, 'msg': f'Erro ao salvar aluno: {str(e)}'})
         finally:
             cursor.close()
             conn.close()
             
-    return redirect(url_for('novo_aluno'))
+        is_ajax = request.headers.get('Accept') == 'application/json' or 'fetch' in str(request.headers.get('User-Agent', '')).lower() or request.headers.get('Sec-Fetch-Mode') == 'cors'
+        return jsonify({
+            'sucesso': True, 
+            'msg': 'Aluno salvo com sucesso!',
+            'id_aluno': aluno_id
+        })
+            
+    return jsonify({'sucesso': False, 'msg': 'Erro de conexão com o banco de dados.'})
 
 # ==============================================================================
 # ROTAS DO CONTROLE DE ACESSOS E PERMISSÕES
@@ -1503,6 +1516,8 @@ def salvar_matricula():
     matricula_id = request.form.get('matricula_id')
     aluno_id = request.form.get('aluno_id')
     tipo_plano = request.form.get('tipo_plano')
+    forma_pagamento = request.form.get('forma_pagamento')
+    parcelas = request.form.get('parcelas')
     data_inicio = request.form.get('data_inicio')
     data_fim = request.form.get('data_fim')
     dia_vencimento = request.form.get('dia_vencimento')
@@ -1510,6 +1525,11 @@ def salvar_matricula():
     
     if not data_fim:
         data_fim = None
+        
+    if not parcelas or not str(parcelas).isdigit():
+        parcelas = 1
+    else:
+        parcelas = int(parcelas)
         
     taxa_matricula = 0.00
     if taxa_matricula_str:
@@ -1529,17 +1549,17 @@ def salvar_matricula():
             if matricula_id:
                 sql_matricula = """
                     UPDATE matriculas 
-                    SET tipo_plano=%s, data_inicio=%s, data_fim=%s, dia_vencimento=%s, taxa_matricula=%s 
+                    SET tipo_plano=%s, forma_pagamento=%s, parcelas=%s, data_inicio=%s, data_fim=%s, dia_vencimento=%s, taxa_matricula=%s 
                     WHERE id=%s
                 """
-                cursor.execute(sql_matricula, (tipo_plano, data_inicio, data_fim, dia_vencimento, taxa_matricula, matricula_id))
+                cursor.execute(sql_matricula, (tipo_plano, forma_pagamento, parcelas, data_inicio, data_fim, dia_vencimento, taxa_matricula, matricula_id))
                 cursor.execute("DELETE FROM matricula_grade WHERE matricula_id = %s", (matricula_id,))
             else:
                 sql_matricula = """
-                    INSERT INTO matriculas (aluno_id, tipo_plano, data_inicio, data_fim, dia_vencimento, taxa_matricula, status)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO matriculas (aluno_id, tipo_plano, forma_pagamento, parcelas, data_inicio, data_fim, dia_vencimento, taxa_matricula, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
-                cursor.execute(sql_matricula, (aluno_id, tipo_plano, data_inicio, data_fim, dia_vencimento, taxa_matricula, 'Ativa'))
+                cursor.execute(sql_matricula, (aluno_id, tipo_plano, forma_pagamento, parcelas, data_inicio, data_fim, dia_vencimento, taxa_matricula, 'Ativa'))
                 matricula_id = cursor.lastrowid
             
             modalidades = request.form.getlist('grade_modalidade[]')

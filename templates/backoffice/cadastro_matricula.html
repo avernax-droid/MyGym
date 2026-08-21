@@ -20,6 +20,9 @@
  17/08/26: Ajuste CSS no botão "Definir Dias e Horários" para evitar quebra de linha (white-space: nowrap).
  17/08/26: Ajuste na exibição do resumo de horários na grade para formato de lista (um por linha com separador hífen).
  17/08/26: Integração da função global monitorarAlteracoes para controle inteligente do botão Salvar.
+ 21/08/26: Integração da Ponte Inteligente (Leitura de aluno_id da URL e dados de carrinho do sessionStorage).
+ 21/08/26: Inclusão do painel interativo de Forma de Pagamento (Cartão, PIX, Boleto) e parcelamento dinâmico.
+ 21/08/26: Refatoração da Forma de Pagamento para exibição em Modal (Popup) em vez de painel inline para manter a tela limpa.
 ============================================================================== #}
 
 {% extends "base.html" %}
@@ -413,6 +416,41 @@
                     <input type="text" id="taxa_matricula" name="taxa_matricula" class="input-limpo" placeholder="R$ 0,00" oninput="formatarMoeda(this)">
                 </div>
             </div>
+            
+            <!-- NOVA SEÇÃO: FORMA DE PAGAMENTO -->
+            <div class="divisor-secao">Forma de Pagamento</div>
+            
+            <div class="form-linha">
+                <div class="form-grupo form-metade">
+                    <label for="forma_pagamento">Método de Pagamento *</label>
+                    <select id="forma_pagamento" name="forma_pagamento" class="select-estilo-btn campo-validavel" required>
+                        <option value="">Selecione...</option>
+                        <option value="Cartão de Crédito">Cartão de Crédito</option>
+                        <option value="Cartão de Débito">Cartão de Débito</option>
+                        <option value="PIX">PIX</option>
+                        <option value="Boleto">Boleto bancário</option>
+                        <option value="Dinheiro">Dinheiro (Espécie)</option>
+                    </select>
+                </div>
+                
+                <div class="form-grupo form-metade" id="box_parcelas" style="display: none;">
+                    <label for="parcelas">Parcelamento</label>
+                    <select id="parcelas" name="parcelas" class="select-estilo-btn">
+                        <option value="1">1x (À vista)</option>
+                        <option value="2">2x</option>
+                        <option value="3">3x</option>
+                        <option value="4">4x</option>
+                        <option value="5">5x</option>
+                        <option value="6">6x</option>
+                        <option value="7">7x</option>
+                        <option value="8">8x</option>
+                        <option value="9">9x</option>
+                        <option value="10">10x</option>
+                        <option value="11">11x</option>
+                        <option value="12">12x</option>
+                    </select>
+                </div>
+            </div>
 
             <div class="divisor-secao">Grade de atividades e horários</div>
             
@@ -438,7 +476,7 @@
 <!-- INCLUSÃO DO COMPONENTE DE MODALIDADES -->
 {% include 'componentes/modal_modalidades.html' %}
 
-<!-- MODAL DE MATRIZ DE HORÁRIOS (Redimensionado para 750px) -->
+<!-- MODAL DE MATRIZ DE HORÁRIOS -->
 <div id="modalDiasHorarios" class="modal-modalidades">
     <div class="modal-modalidades-content" style="max-width: 750px; position: relative;">
         <button type="button" id="btnFecharModalDiasX" style="position: absolute; top: 1.5rem; right: 1.5rem; background: transparent; border: none; color: #FFFFFF; font-size: 1.8rem; cursor: pointer; opacity: 0.6; transition: opacity 0.3s ease; line-height: 1; padding: 0;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="Fechar">&times;</button>
@@ -452,6 +490,22 @@
 
         <div style="text-align: right; margin-top: 2rem;">
             <button type="button" id="btnFecharModalDias" class="btn-custom btn-salvar" style="padding: 0.6rem 2rem; font-size: 0.9rem; width: auto;">Confirmar Horários</button>
+        </div>
+    </div>
+</div>
+
+<!-- MODAL: INFORMAÇÕES DE PAGAMENTO -->
+<div id="modalPagamento" class="modal-modalidades">
+    <div class="modal-modalidades-content" style="max-width: 500px; position: relative; text-align: center;">
+        <button type="button" id="btnFecharModalPagamentoX" style="position: absolute; top: 1.5rem; right: 1.5rem; background: transparent; border: none; color: #FFFFFF; font-size: 1.8rem; cursor: pointer; opacity: 0.6; transition: opacity 0.3s ease; line-height: 1; padding: 0;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'" title="Fechar">&times;</button>
+        <h3 id="tituloModalPagamento" style="margin-top: 0; margin-bottom: 1.5rem; font-size: 1.3rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.5rem; color: #80D5C9;">Instruções de Pagamento</h3>
+        
+        <div id="conteudoModalPagamento" style="padding: 1rem 0;">
+            <!-- Conteúdo dinâmico -->
+        </div>
+        
+        <div style="margin-top: 2rem;">
+            <button type="button" id="btnFecharModalPagamento" class="btn-custom btn-salvar" style="padding: 0.6rem 2rem; font-size: 0.9rem; width: auto;">OK, Entendi</button>
         </div>
     </div>
 </div>
@@ -488,9 +542,76 @@
         const modalDiasHorarios = document.getElementById("modalDiasHorarios");
         const btnFecharModalDias = document.getElementById("btnFecharModalDias");
         const btnFecharModalDiasX = document.getElementById("btnFecharModalDiasX");
+        
+        // Elementos do Painel de Pagamento
+        const formaPagamentoSelect = document.getElementById('forma_pagamento');
+        const boxParcelas = document.getElementById('box_parcelas');
+        
+        // Elementos do Modal de Pagamento
+        const modalPagamento = document.getElementById('modalPagamento');
+        const conteudoModalPagamento = document.getElementById('conteudoModalPagamento');
+        const tituloModalPagamento = document.getElementById('tituloModalPagamento');
+
+        document.getElementById('btnFecharModalPagamentoX').addEventListener('click', () => modalPagamento.style.display = 'none');
+        document.getElementById('btnFecharModalPagamento').addEventListener('click', () => modalPagamento.style.display = 'none');
+
+        // === LÓGICA DO MODAL DE PAGAMENTO DINÂMICO ===
+        formaPagamentoSelect.addEventListener('change', function() {
+            const valor = this.value;
+            boxParcelas.style.display = 'none';
+
+            if (valor === '') return;
+
+            let htmlConteudo = '';
+            let titulo = valor;
+
+            if (valor === 'Cartão de Crédito' || valor === 'Cartão de Débito') {
+                if(valor === 'Cartão de Crédito') boxParcelas.style.display = 'block';
+                htmlConteudo = `
+                    <div style="font-size: 3rem; color: rgba(255,255,255,0.8); display: flex; gap: 1.5rem; justify-content: center; align-items: center; margin-bottom: 1rem;">
+                        <i class="fab fa-cc-visa" title="Visa"></i>
+                        <i class="fab fa-cc-mastercard" title="Mastercard"></i>
+                        <i class="fab fa-cc-amex" title="American Express"></i>
+                        <i class="fab fa-cc-diners-club" title="Diners Club"></i>
+                    </div>
+                    <p style="font-size: 0.95rem; color: rgba(255,255,255,0.7); margin: 0;">Aproxime, insira ou passe o cartão na maquininha da recepção.</p>
+                `;
+            } else if (valor === 'PIX') {
+                htmlConteudo = `
+                    <button type="button" class="btn-custom btn-salvar" style="padding: 0.8rem 2.5rem; font-size: 1rem;" onclick="alert('Funcionalidade de geração de QR Code PIX em desenvolvimento.')">
+                        <i class="fas fa-qrcode" style="margin-right: 8px;"></i> Gerar QR Code PIX
+                    </button>
+                    <p style="font-size: 0.9rem; color: rgba(255,255,255,0.6); margin-top: 1.5rem; margin-bottom: 0;">O pagamento é aprovado na hora. Confirme o recebimento pelo sistema.</p>
+                `;
+            } else if (valor === 'Boleto') {
+                htmlConteudo = `
+                    <button type="button" class="btn-custom btn-cancelar" style="padding: 0.8rem 2.5rem; font-size: 1rem; color: #80D5C9; border-color: #80D5C9;" onclick="alert('Funcionalidade de emissão de Boleto em desenvolvimento.')">
+                        <i class="fas fa-barcode" style="margin-right: 8px;"></i> Gerar Boleto Bancário
+                    </button>
+                    <p style="font-size: 0.9rem; color: rgba(255,255,255,0.6); margin-top: 1.5rem; margin-bottom: 0;">A compensação pode levar até 3 dias úteis. Entregue o boleto impresso ou envie por e-mail.</p>
+                `;
+            } else if (valor === 'Dinheiro') {
+                htmlConteudo = `
+                    <div style="font-size: 3rem; color: #80D5C9; margin-bottom: 1rem;">
+                        <i class="fas fa-money-bill-wave"></i>
+                    </div>
+                    <p style="font-size: 0.95rem; color: rgba(255,255,255,0.7); margin: 0;">Receba o valor em espécie e guarde no caixa.</p>
+                `;
+            }
+
+            if (htmlConteudo !== '') {
+                tituloModalPagamento.textContent = titulo;
+                conteudoModalPagamento.innerHTML = htmlConteudo;
+                modalPagamento.style.display = 'flex';
+            }
+            
+            if (typeof monitorarAlteracoes === 'function') {
+                const event = new Event('input', { bubbles: true });
+                this.dispatchEvent(event);
+            }
+        });
 
         // === INTEGRAÇÃO DO MONITORAMENTO GLOBAL ===
-        // Valida apenas a obrigatoriedade e retorna boolean
         function validarFormulario() {
             let formularioValido = true;
             const camposParaValidar = form.querySelectorAll(".campo-validavel");
@@ -514,7 +635,6 @@
             return formularioValido;
         }
 
-        // Chamada inicial (snapshot vazio)
         if (typeof monitorarAlteracoes === 'function') {
             monitorarAlteracoes('formMatricula', 'btnSalvar', validarFormulario);
         }
@@ -538,47 +658,10 @@
         tabelaHTML += '</tbody></table>';
         document.getElementById('tabelaMatrizContainer').innerHTML = tabelaHTML;
 
-        // Adiciona evento de clique nas células
         document.querySelectorAll('.celula-matriz').forEach(celula => {
             celula.addEventListener('click', function() {
                 this.classList.toggle('celula-selecionada');
             });
-        });
-
-        // === IDENTIFICAÇÃO DINÂMICA: CPF VS MATRÍCULA ===
-        inputBusca.addEventListener("input", function(e) {
-            if (typeof aplicarMascaraCPFOuMatricula === 'function') {
-                aplicarMascaraCPFOuMatricula(this);
-            }
-            
-            let valor = this.value.replace(/\D/g, ""); 
-            
-            if (valor === "") {
-                spanErroBusca.style.display = "none";
-                areaDados.disabled = true;
-                imgFoto.src = "";
-                imgFoto.style.display = "none";
-                fotoPlaceholder.style.display = "block";
-                document.getElementById('aluno_id').value = "";
-                document.getElementById('matricula_id').value = "";
-                document.getElementById('nome_completo').value = "";
-                inputBusca.style.color = "#FFFFFF";
-                
-                document.getElementById('tipo_plano').value = "";
-                document.getElementById('data_inicio').value = "";
-                document.getElementById('data_fim').value = "";
-                document.getElementById('dia_vencimento').value = "";
-                document.getElementById('taxa_matricula').value = "";
-                chksModalidade.forEach(chk => chk.checked = false);
-                containerGrade.innerHTML = "";
-                
-                // Reinicia o monitoramento com os campos limpos
-                setTimeout(() => {
-                    if (typeof monitorarAlteracoes === 'function') {
-                        monitorarAlteracoes('formMatricula', 'btnSalvar', validarFormulario);
-                    }
-                }, 100);
-            }
         });
 
         // === EVENTOS: MODAL DE MODALIDADES ===
@@ -793,17 +876,109 @@
             verificarPendenciasGrade();
         });
 
-        // === BUSCA DO ALUNO ===
-        inputBusca.addEventListener("blur", function(e) {
-            if (typeof formatarMatriculaBlur === 'function') {
-                formatarMatriculaBlur(this);
+        // === PONTE INTELIGENTE: CARREGAR CARRINHO DA SESSÃO ===
+        function carregarCarrinhoDaSessao() {
+            const planosSessao = sessionStorage.getItem('mygym_planos_selecionados');
+            const carrinhoSessao = sessionStorage.getItem('mygym_carrinho_turmas');
+
+            if (planosSessao || carrinhoSessao) {
+                // Preenchimento de dados de base da matrícula
+                const hoje = new Date().toISOString().split('T')[0];
+                const dataInicioInput = document.getElementById('data_inicio');
+                if(dataInicioInput && !dataInicioInput.value) {
+                    dataInicioInput.value = hoje;
+                }
+
+                if (planosSessao) {
+                    const planosObj = JSON.parse(planosSessao);
+                    const chaves = Object.keys(planosObj);
+                    if (chaves.length > 0) {
+                        const planoStr = planosObj[chaves[0]].plano; 
+                        const selectPlano = document.getElementById('tipo_plano');
+                        if (selectPlano) {
+                            Array.from(selectPlano.options).forEach(opt => {
+                                if(opt.value.toLowerCase() === planoStr.toLowerCase()) {
+                                    selectPlano.value = opt.value;
+                                }
+                            });
+                        }
+                    }
+                }
+
+                if (carrinhoSessao) {
+                    const carrinhoArr = JSON.parse(carrinhoSessao);
+                    if (carrinhoArr.length > 0) {
+                        // Limpa a grade existente que possa ter vindo do banco
+                        chksModalidade.forEach(chk => chk.checked = false);
+                        containerGrade.innerHTML = "";
+
+                        // Marca as atividades oriundas do quadro de vagas
+                        carrinhoArr.forEach(item => {
+                            const chk = document.querySelector(`.chk-modalidade[value="${item.modalidade}"]`);
+                            if (chk) chk.checked = true;
+                        });
+
+                        gerarGradeDinamica();
+
+                        const mapModalidades = {};
+                        carrinhoArr.forEach(item => {
+                            if (!mapModalidades[item.modalidade]) mapModalidades[item.modalidade] = [];
+                            mapModalidades[item.modalidade].push(item);
+                        });
+
+                        // Injeta silenciosamente os inputs ocultos e o resumo visual
+                        document.querySelectorAll('.linha-grade').forEach(linha => {
+                            const modNome = linha.querySelector('.modalidade-titulo').textContent.trim();
+                            if (mapModalidades[modNome]) {
+                                const containerHiddens = linha.querySelector('.hiddens-container');
+                                const spanResumo = linha.querySelector('.resumo-horarios');
+                                let resumosVisuais = [];
+                                let hiddensHTML = '';
+
+                                mapModalidades[modNome].forEach(item => {
+                                    const nomeCurto = item.dias.split('-')[0].substring(0, 3);
+                                    resumosVisuais.push(`${nomeCurto} - ${item.horario}`);
+
+                                    hiddensHTML += `
+                                        <input type="hidden" name="grade_modalidade[]" value="${modNome}">
+                                        <input type="hidden" name="grade_dias[]" value="${item.dias}">
+                                        <input type="hidden" name="grade_horario[]" value="${item.horario}">
+                                    `;
+                                });
+
+                                containerHiddens.innerHTML = hiddensHTML;
+                                spanResumo.innerHTML = resumosVisuais.join('<br>');
+                                spanResumo.style.color = '#80D5C9';
+                                spanResumo.style.fontWeight = '600';
+                                spanResumo.style.fontStyle = 'normal';
+                            }
+                        });
+                    }
+                }
+
+                // Limpa a memória para que uma próxima matrícula não herde lixo residual
+                sessionStorage.removeItem('mygym_planos_selecionados');
+                sessionStorage.removeItem('mygym_carrinho_turmas');
+
+                // Atualiza o painel do motor de validação simulando interação
+                setTimeout(() => {
+                    if (typeof monitorarAlteracoes === 'function') {
+                        monitorarAlteracoes('formMatricula', 'btnSalvar', validarFormulario);
+                    }
+                    const event = new Event('input', { bubbles: true });
+                    if(document.getElementById('tipo_plano')) {
+                        document.getElementById('tipo_plano').dispatchEvent(event);
+                    }
+                }, 100);
             }
-            
-            const termoDigitado = this.value.trim();
+        }
+
+        // === ROTINA CENTRALIZADA DE BUSCA ===
+        function realizarBuscaAluno(termoDigitado) {
             if (termoDigitado === "") return;
 
-            if (this.getAttribute('data-ultimo-buscado') === termoDigitado) return;
-            this.setAttribute('data-ultimo-buscado', termoDigitado);
+            if (inputBusca.getAttribute('data-ultimo-buscado') === termoDigitado) return;
+            inputBusca.setAttribute('data-ultimo-buscado', termoDigitado);
 
             fetch(`/api/alunos/buscar?termo=${encodeURIComponent(termoDigitado)}`)
                 .then(response => response.json())
@@ -832,12 +1007,24 @@
                             fotoPlaceholder.style.display = "block";
                         }
                         
+                        // Preenchimento de dados vindos do banco
                         if (alunoData.matricula) {
                             document.getElementById('matricula_id').value = alunoData.matricula.id;
                             document.getElementById('tipo_plano').value = alunoData.matricula.tipo_plano || "";
                             document.getElementById('data_inicio').value = alunoData.matricula.data_inicio || "";
                             document.getElementById('data_fim').value = alunoData.matricula.data_fim || "";
                             document.getElementById('dia_vencimento').value = alunoData.matricula.dia_vencimento || "";
+                            
+                            // Integração dos novos campos de pagamento
+                            document.getElementById('forma_pagamento').value = alunoData.matricula.forma_pagamento || "";
+                            document.getElementById('parcelas').value = alunoData.matricula.parcelas || "1";
+                            
+                            // Apenas exibe as parcelas se for cartão, sem abrir o modal na carga automática
+                            if (alunoData.matricula.forma_pagamento === 'Cartão de Crédito') {
+                                boxParcelas.style.display = 'block';
+                            } else {
+                                boxParcelas.style.display = 'none';
+                            }
                             
                             const taxaInput = document.getElementById('taxa_matricula');
                             taxaInput.value = alunoData.matricula.taxa_matricula || "";
@@ -890,6 +1077,9 @@
                         } else {
                             document.getElementById('matricula_id').value = "";
                             document.getElementById('tipo_plano').value = "";
+                            document.getElementById('forma_pagamento').value = "";
+                            document.getElementById('parcelas').value = "1";
+                            document.getElementById('box_parcelas').style.display = "none";
                             document.getElementById('data_inicio').value = "";
                             document.getElementById('data_fim').value = "";
                             document.getElementById('dia_vencimento').value = "";
@@ -898,7 +1088,9 @@
                             containerGrade.innerHTML = "";
                         }
                         
-                        // Após preencher todos os dados do banco, tira um novo "snapshot" do form
+                        // Verifica se existe o fluxo da "Ponte Inteligente" para sobrepor as configurações da sessão
+                        carregarCarrinhoDaSessao();
+                        
                         setTimeout(() => {
                             if (typeof monitorarAlteracoes === 'function') {
                                 monitorarAlteracoes('formMatricula', 'btnSalvar', validarFormulario);
@@ -917,7 +1109,63 @@
                     spanErroBusca.textContent = "Erro de conexão.";
                     spanErroBusca.style.display = "block";
                 });
+        }
+
+        inputBusca.addEventListener("blur", function(e) {
+            if (typeof formatarMatriculaBlur === 'function') {
+                formatarMatriculaBlur(this);
+            }
+            const termoDigitado = this.value.trim();
+            realizarBuscaAluno(termoDigitado);
         });
+        
+        inputBusca.addEventListener("input", function(e) {
+            if (typeof aplicarMascaraCPFOuMatricula === 'function') {
+                aplicarMascaraCPFOuMatricula(this);
+            }
+            
+            let valor = this.value.replace(/\D/g, ""); 
+            
+            if (valor === "") {
+                spanErroBusca.style.display = "none";
+                areaDados.disabled = true;
+                imgFoto.src = "";
+                imgFoto.style.display = "none";
+                fotoPlaceholder.style.display = "block";
+                document.getElementById('aluno_id').value = "";
+                document.getElementById('matricula_id').value = "";
+                document.getElementById('nome_completo').value = "";
+                inputBusca.style.color = "#FFFFFF";
+                
+                document.getElementById('tipo_plano').value = "";
+                document.getElementById('forma_pagamento').value = "";
+                document.getElementById('parcelas').value = "1";
+                document.getElementById('box_parcelas').style.display = "none";
+                document.getElementById('data_inicio').value = "";
+                document.getElementById('data_fim').value = "";
+                document.getElementById('dia_vencimento').value = "";
+                document.getElementById('taxa_matricula').value = "";
+                chksModalidade.forEach(chk => chk.checked = false);
+                containerGrade.innerHTML = "";
+                
+                setTimeout(() => {
+                    if (typeof monitorarAlteracoes === 'function') {
+                        monitorarAlteracoes('formMatricula', 'btnSalvar', validarFormulario);
+                    }
+                }, 100);
+            }
+        });
+
+        // === INJEÇÃO VIA URL (PONTE INTELIGENTE) ===
+        const params = new URLSearchParams(window.location.search);
+        const alunoIdUrl = params.get('aluno_id');
+        if (alunoIdUrl) {
+            // Insere o valor recebido e força o gatilho da busca
+            inputBusca.value = String(alunoIdUrl).padStart(4, '0');
+            setTimeout(() => {
+                realizarBuscaAluno(alunoIdUrl);
+            }, 150);
+        }
 
         // === NAVEGAÇÃO GLOBAL COM A TECLA ENTER ===
         form.addEventListener("keydown", function(e) {

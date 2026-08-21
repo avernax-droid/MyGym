@@ -12,12 +12,16 @@ HISTÓRICO DE ALTERAÇÕES:
 19/08/26: Refatoração para Matriz Dinâmica de Horários (Grid) com cores de status.
 19/08/26: Remoção do botão de busca (carregamento automático via select) e ocultação do carrinho.
 19/08/26: Implementação do Popup (Modal) de Simulador de Valores com base na frequência selecionada e integração com a API de Preços.
+21/08/26: Ajuste de nomenclatura (Ocupação para Vagas), disposição de preços em 4 colunas e seleção interativa com salvamento na sessão.
+21/08/26: Ajuste de textos no modal de Resumo de Valores e botão de Cadastro.
+21/08/26: Alteração do botão inferior de Matrícula para Cadastro e redirecionamento do fluxo para Novo Aluno.
+21/08/26: Alteração do texto do botão de seleção de turmas para "Finalizar".
 ============================================================================== 
 #}
 
 {% extends "base.html" %}
 
-{% block title %}Quadro de Ocupação - MyGym{% endblock %}
+{% block title %}Quadro de Vagas - MyGym{% endblock %}
 
 {% block head %}
 <style>
@@ -289,7 +293,7 @@ HISTÓRICO DE ALTERAÇÕES:
     .tooltip-linha { display: flex; justify-content: space-between; margin-top: 4px; }
     .tooltip-val { font-weight: bold; }
 
-    /* Área Inferior (Botão Matrícula) */
+    /* Área Inferior (Botão Ação) */
     .area-acao-inferior {
         display: flex;
         justify-content: center;
@@ -364,7 +368,7 @@ HISTÓRICO DE ALTERAÇÕES:
 
     .grid-precos {
         display: grid;
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(4, 1fr); /* Ajustado para 4 colunas */
         gap: 1rem;
     }
 
@@ -373,6 +377,26 @@ HISTÓRICO DE ALTERAÇÕES:
         padding: 0.8rem;
         border-radius: 6px;
         border-left: 3px solid #80D5C9;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .box-preco:hover {
+        background-color: rgba(128, 213, 201, 0.15);
+    }
+    
+    .box-preco.plano-selecionado {
+        background-color: #80D5C9;
+        color: #001524;
+    }
+    
+    .box-preco.plano-selecionado span.rotulo {
+        color: #002B49;
+        font-weight: bold;
+    }
+    
+    .box-preco.plano-selecionado span.valor {
+        color: #001524;
     }
 
     .box-preco span.rotulo {
@@ -397,7 +421,7 @@ HISTÓRICO DE ALTERAÇÕES:
     <a href="/" class="btn-fechar-form" title="Fechar">&times;</a>
 
     <header class="header-pagina">
-        <h1>Quadro de Ocupação</h1>
+        <h1>Quadro de Vagas</h1>
         <p>Selecione a atividade para visualizar a matriz e clique nos horários desejados.</p>
     </header>
 
@@ -448,7 +472,7 @@ HISTÓRICO DE ALTERAÇÕES:
     <!-- Área Inferior do Botão -->
     <div class="area-acao-inferior">
         <button type="button" id="btnMatricula" class="btn-prosseguir">
-            Matrícula <span id="contadorSelecao"></span>
+            Finalizar <span id="contadorSelecao"></span>
         </button>
     </div>
 </div>
@@ -459,7 +483,7 @@ HISTÓRICO DE ALTERAÇÕES:
         <button type="button" class="btn-fechar fechar-modal-valores">&times;</button>
         <h2 class="modal-title" style="margin-bottom: 0.5rem; color: #80D5C9; text-align: left;">Resumo de Valores</h2>
         <p style="text-align: left; color: rgba(255,255,255,0.7); font-size: 0.85rem; margin-bottom: 1.5rem; margin-top:0;">
-            Apresente as opções de planos com base nos horários selecionados.
+            Selecione o plano desejado e avance para o cadastro.
         </p>
         
         <div id="containerSimuladorPrecos" style="max-height: 400px; overflow-y: auto; padding-right: 5px;">
@@ -469,7 +493,7 @@ HISTÓRICO DE ALTERAÇÕES:
         
         <div style="margin-top: 1.5rem; text-align: right; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1.5rem;">
             <button type="button" id="btnAvancarCadastro" class="btn-acao" style="margin: 0; width: max-content; padding: 0.8rem 2rem;">
-                Avançar para Cadastro <i class="fas fa-arrow-right" style="margin-left: 5px;"></i>
+                Cadastro
             </button>
         </div>
     </div>
@@ -507,6 +531,8 @@ HISTÓRICO DE ALTERAÇÕES:
         
         // --- LÓGICA DE MEMÓRIA (CARRINHO INVISÍVEL) ---
         let carrinho = [];
+        let planosSelecionados = {}; // Armazena os planos selecionados por modalidade
+        let gruposGlobais = {}; // Referência para validar o clique final
 
         function adicionarSelecao(id, modalidade, dias, horario) {
             if (!carrinho.find(item => item.id == id && item.dias == dias)) {
@@ -571,7 +597,7 @@ HISTÓRICO DE ALTERAÇÕES:
         const diasLabel = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
 
         function buscarGrade(modalidadeFiltro) {
-            listaResultados.innerHTML = '<div class="msg-vazio">Analisando mapa de ocupação...</div>';
+            listaResultados.innerHTML = '<div class="msg-vazio">Analisando mapa de vagas...</div>';
 
             fetch(`/api/turmas/buscar?modalidade=${encodeURIComponent(modalidadeFiltro)}`)
                 .then(response => response.json())
@@ -654,7 +680,7 @@ HISTÓRICO DE ALTERAÇÕES:
                 })
                 .catch(error => {
                     console.error("Erro na busca:", error);
-                    listaResultados.innerHTML = '<div class="msg-vazio">Erro de conexão ao buscar mapa de ocupação.</div>';
+                    listaResultados.innerHTML = '<div class="msg-vazio">Erro de conexão ao buscar mapa de vagas.</div>';
                 });
         }
 
@@ -714,6 +740,8 @@ HISTÓRICO DE ALTERAÇÕES:
         
         document.getElementById('btnMatricula').addEventListener('click', function() {
             if (carrinho.length === 0) return;
+            // Limpar seleções anteriores de planos
+            planosSelecionados = {}; 
             modalValores.style.display = 'flex';
             renderizarResumoValores();
         });
@@ -729,35 +757,35 @@ HISTÓRICO DE ALTERAÇÕES:
             containerSimulador.innerHTML = '<div style="text-align: center; color: rgba(255,255,255,0.5);">Buscando valores na tabela de preços...</div>';
             
             // Agrupar itens por modalidade
-            const grupos = {};
+            gruposGlobais = {};
             carrinho.forEach(item => {
-                if (!grupos[item.modalidade]) {
-                    grupos[item.modalidade] = { diasSelecionados: [], infoExibicao: [] };
+                if (!gruposGlobais[item.modalidade]) {
+                    gruposGlobais[item.modalidade] = { diasSelecionados: [], infoExibicao: [] };
                 }
-                if (!grupos[item.modalidade].diasSelecionados.includes(item.dias)) {
-                    grupos[item.modalidade].diasSelecionados.push(item.dias);
+                if (!gruposGlobais[item.modalidade].diasSelecionados.includes(item.dias)) {
+                    gruposGlobais[item.modalidade].diasSelecionados.push(item.dias);
                 }
-                grupos[item.modalidade].infoExibicao.push(`${item.dias} às ${item.horario}`);
+                gruposGlobais[item.modalidade].infoExibicao.push(`${item.dias} às ${item.horario}`);
             });
 
             // Disparar requisições para a API de Preços
-            const promessas = Object.keys(grupos).map(mod => {
+            const promessas = Object.keys(gruposGlobais).map(mod => {
                 return fetch(`/api/precos/buscar?modalidade=${encodeURIComponent(mod)}`)
                     .then(res => res.json())
                     .then(data => {
-                        grupos[mod].precosBanco = (data.sucesso && data.precos) ? data.precos : [];
+                        gruposGlobais[mod].precosBanco = (data.sucesso && data.precos) ? data.precos : [];
                     })
                     .catch(err => {
                         console.error("Erro API Preços:", err);
-                        grupos[mod].precosBanco = [];
+                        gruposGlobais[mod].precosBanco = [];
                     });
             });
 
             Promise.all(promessas).then(() => {
                 let htmlFinal = '';
 
-                Object.keys(grupos).forEach(mod => {
-                    const info = grupos[mod];
+                Object.keys(gruposGlobais).forEach(mod => {
+                    const info = gruposGlobais[mod];
                     const isMusculacao = (mod === "Musculação");
                     
                     // Conta quantos dias únicos a pessoa vai frequentar essa atividade
@@ -782,20 +810,20 @@ HISTÓRICO DE ALTERAÇÕES:
                     if (precoObj) {
                         htmlFinal += `
                             <div class="grid-precos">
-                                <div class="box-preco">
+                                <div class="box-preco box-preco-selecionavel" data-modalidade="${mod}" data-plano="Mensal" data-valor="${precoObj.mensal}">
                                     <span class="rotulo">Mensal</span>
                                     <span class="valor">${formatarBr(precoObj.mensal)}</span>
                                 </div>
-                                <div class="box-preco">
-                                    <span class="rotulo">Trimestral / mês</span>
+                                <div class="box-preco box-preco-selecionavel" data-modalidade="${mod}" data-plano="Trimestral" data-valor="${precoObj.trimestral}">
+                                    <span class="rotulo">Trimestral</span>
                                     <span class="valor">${formatarBr(precoObj.trimestral)}</span>
                                 </div>
-                                <div class="box-preco">
-                                    <span class="rotulo">Semestral / mês</span>
+                                <div class="box-preco box-preco-selecionavel" data-modalidade="${mod}" data-plano="Semestral" data-valor="${precoObj.semestral}">
+                                    <span class="rotulo">Semestral</span>
                                     <span class="valor">${formatarBr(precoObj.semestral)}</span>
                                 </div>
-                                <div class="box-preco">
-                                    <span class="rotulo">Anual / mês</span>
+                                <div class="box-preco box-preco-selecionavel" data-modalidade="${mod}" data-plano="Anual" data-valor="${precoObj.anual}">
+                                    <span class="rotulo">Anual</span>
                                     <span class="valor">${formatarBr(precoObj.anual)}</span>
                                 </div>
                             </div>
@@ -806,18 +834,48 @@ HISTÓRICO DE ALTERAÇÕES:
                 });
 
                 containerSimulador.innerHTML = htmlFinal;
+                vincularEventosPlanos();
+            });
+        }
+
+        // --- CONTROLE DE SELEÇÃO DE PLANOS ---
+        function vincularEventosPlanos() {
+            const boxes = document.querySelectorAll('.box-preco-selecionavel');
+            boxes.forEach(box => {
+                box.addEventListener('click', function() {
+                    const mod = this.getAttribute('data-modalidade');
+                    const plano = this.getAttribute('data-plano');
+                    const valor = this.getAttribute('data-valor');
+
+                    // Remove a seleção anterior dessa modalidade específica
+                    const irmaos = this.parentElement.querySelectorAll('.box-preco-selecionavel');
+                    irmaos.forEach(b => b.classList.remove('plano-selecionado'));
+
+                    // Adiciona a classe visual ao selecionado atual
+                    this.classList.add('plano-selecionado');
+
+                    // Guarda na memória local a escolha
+                    planosSelecionados[mod] = { plano: plano, valor: valor };
+                });
             });
         }
 
         // --- AVANÇAR PARA O PRÓXIMO PASSO DO FLUXO ---
         document.getElementById('btnAvancarCadastro').addEventListener('click', function() {
-            // Salva as escolhas na memória para uso na tela de matrícula final
+            const totalModalidades = Object.keys(gruposGlobais).length;
+            const totalSelecionados = Object.keys(planosSelecionados).length;
+
+            if (totalSelecionados < totalModalidades) {
+                alert("Por favor, selecione um plano para cada modalidade desejada antes de avançar.");
+                return;
+            }
+
+            // Salva as escolhas na memória (sessionStorage) para uso nas telas seguintes
             sessionStorage.setItem('mygym_carrinho_turmas', JSON.stringify(carrinho));
+            sessionStorage.setItem('mygym_planos_selecionados', JSON.stringify(planosSelecionados));
             
-            // Redireciona provisoriamente para a tela existente de Matrículas
-            // NOTA: Conforme combinado, o fluxo exato dessa transição 
-            // será debatido no próximo brainstorm!
-            window.location.href = '/backoffice/matriculas/nova';
+            // Redireciona para a tela de Cadastro de Aluno
+            window.location.href = '/backoffice/alunos/novo';
         });
 
         // --- MODAL DA LISTA DE ESPERA ---

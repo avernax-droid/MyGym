@@ -18,6 +18,7 @@
  12/08/26: Inclusão do painel de exibição visual do Número da Matrícula.
  12/08/26: Formatação e alteração visual da barra de consulta após busca bem-sucedida.
  17/08/26: Integração da função global monitorarAlteracoes para controle inteligente do botão Salvar.
+ 21/08/26: Implementação da Ponte Inteligente (ocultação do seletor em fluxo de vendas e interceptação do form via AJAX para redirecionamento automático).
 ============================================================================== #}
 
 {% extends "base.html" %}
@@ -329,7 +330,7 @@
 
     <!-- SELETOR DE MODO E EXIBIÇÃO DE MATRÍCULA -->
     <div class="seletor-modo" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(255, 255, 255, 0.1); padding-bottom: 1rem;">
-        <div style="display: flex; gap: 2rem;">
+        <div id="bloco_radios_modo" style="display: flex; gap: 2rem;">
             <label class="opcao-modo">
                 <input type="radio" name="modo_tela" value="consulta" onchange="alternarModo()"> <strong>Consulta</strong>
             </label>
@@ -877,8 +878,80 @@
             ativarPreviewImagem(inputFoto, imgFoto, phFoto);
         }
         
-        // O formulário de aluno, por padrão, inicia oculto até que se escolha o modo no rádio button.
-        // Assim, a chamada de monitoramento inicial só ocorrerá ao alternar para "Cadastro".
+        // --- NOVA LÓGICA: DETECÇÃO DE CARRINHO (FLUXO DE VENDAS) ---
+        const temCarrinho = sessionStorage.getItem('mygym_carrinho_turmas');
+        if (temCarrinho && JSON.parse(temCarrinho).length > 0) {
+            // Esconde os radios de Consulta/Cadastro
+            const blocoRadios = document.getElementById('bloco_radios_modo');
+            if (blocoRadios) blocoRadios.style.display = 'none';
+            
+            // Força o modo 'cadastro' dinamicamente
+            const radioCadastro = document.querySelector('input[name="modo_tela"][value="cadastro"]');
+            if (radioCadastro) {
+                radioCadastro.checked = true;
+                alternarModo();
+            }
+        }
+        
+        // --- NOVA LÓGICA: INTERCEPTAÇÃO DO SALVAMENTO (PONTE INTELIGENTE) ---
+        const formAluno = document.getElementById('formAluno');
+        if (formAluno) {
+            formAluno.addEventListener('submit', function(e) {
+                e.preventDefault(); // Impede o envio tradicional
+                
+                const btnSalvar = document.getElementById('btnSalvar');
+                const textoOriginal = btnSalvar.innerText;
+                btnSalvar.innerText = 'Salvando...';
+                btnSalvar.disabled = true;
+
+                const formData = new FormData(this);
+
+                fetch(this.action, {
+                    method: this.method,
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.sucesso) {
+                        alert(data.msg || "Aluno salvo com sucesso!");
+                        
+                        // Verifica se há um fluxo de matrícula pendente na memória
+                        const carrinhoAtivo = sessionStorage.getItem('mygym_carrinho_turmas');
+                        if (carrinhoAtivo && JSON.parse(carrinhoAtivo).length > 0) {
+                            // Redireciona para a tela de matrícula final passando o ID gerado
+                            window.location.href = `/backoffice/matriculas/nova?aluno_id=${data.id_aluno}`;
+                        } else {
+                            // Fluxo normal do menu (sem vendas ativas)
+                            formAluno.reset();
+                            document.getElementById('foto_aluno').style.display = 'none';
+                            document.getElementById('foto_placeholder').style.display = 'block';
+                            document.getElementById('containerContatos').innerHTML = '';
+                            adicionarContatoLinha();
+                            
+                            // Exibe a matrícula visual para a recepção poder anotar
+                            if(data.id_aluno) {
+                                document.getElementById('display_matricula').innerText = String(data.id_aluno).padStart(4, '0');
+                                document.getElementById('box-matricula').style.display = 'block';
+                            }
+                            
+                            btnSalvar.innerText = textoOriginal;
+                            btnSalvar.disabled = true; // Desabilita até nova edição
+                            mudarAba('dados-pessoais'); // Retorna para a primeira aba
+                        }
+                    } else {
+                        alert(data.msg || "Erro ao salvar o aluno.");
+                        btnSalvar.innerText = textoOriginal;
+                        btnSalvar.disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error("Erro no envio:", error);
+                    alert("Erro de conexão ao tentar salvar o aluno no servidor.");
+                    btnSalvar.innerText = textoOriginal;
+                    btnSalvar.disabled = false;
+                });
+            });
+        }
 
         const btnBusca = document.getElementById('btnExecutarBusca');
         const inputBusca = document.getElementById('busca_smart');
