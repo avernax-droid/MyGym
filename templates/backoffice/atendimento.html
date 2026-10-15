@@ -1,0 +1,374 @@
+{# ==============================================================================
+ PROJETO: MyGym
+ MÓDULO: templates/backoffice/atendimento.html
+ DATA DE CRIAÇÃO: 15/10/26
+ TÍTULO: Central de Atendimento e Comunicação
+ FUNÇÃO: Gerenciamento unificado de mensagens de visitantes e alunos matriculados, 
+         junto com o controle e confirmação de agendamentos de visitas.
+
+ HISTÓRICO DE ALTERAÇÕES:
+ 15/10/26: Criação inicial da interface de atendimento em duas colunas (lista e chat).
+ 15/10/26: Inclusão da exibição do e-mail do visitante e máscara de telefone.
+============================================================================== #}
+
+{% extends "base.html" %}
+
+{% block title %}Central de Atendimento - MyGym{% endblock %}
+
+{% block head %}
+<style>
+    .container-atendimento {
+        background-color: #001524;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 2rem;
+        border-radius: 8px;
+        width: 100%;
+        max-width: 1000px;
+        box-shadow: 0px 15px 35px rgba(0, 0, 0, 0.5);
+        color: #FFFFFF;
+        box-sizing: border-box;
+        position: relative;
+        max-height: 90vh;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .btn-fechar-form {
+        position: absolute;
+        top: 1rem;
+        right: 1.5rem;
+        font-size: 1.8rem;
+        color: #FFFFFF;
+        text-decoration: none;
+        opacity: 0.6;
+        transition: opacity 0.3s ease;
+        line-height: 1;
+    }
+    .btn-fechar-form:hover { opacity: 1; }
+
+    .header-pagina {
+        margin-bottom: 1.2rem;
+    }
+    .header-pagina h1 {
+        font-size: 1.6rem;
+        font-weight: 600;
+        margin: 0;
+        color: #FFFFFF;
+    }
+
+    .painel-principal {
+        display: flex;
+        gap: 1.5rem;
+        height: 65vh;
+        overflow: hidden;
+    }
+
+    /* Coluna Esquerda: Lista de Conversas */
+    .coluna-conversas {
+        flex: 1;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .abas-conversas {
+        display: flex;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(0, 0, 0, 0.2);
+    }
+    .aba-conv-btn {
+        flex: 1;
+        background: transparent;
+        border: none;
+        color: rgba(255, 255, 255, 0.6);
+        padding: 0.8rem;
+        font-family: var(--fonte-principal);
+        font-size: 0.85rem;
+        font-weight: 600;
+        cursor: pointer;
+        border-bottom: 3px solid transparent;
+        transition: all 0.3s ease;
+    }
+    .aba-conv-btn.ativa {
+        color: #80D5C9;
+        border-bottom-color: #80D5C9;
+        background: rgba(255, 255, 255, 0.03);
+    }
+
+    .lista-itens {
+        overflow-y: auto;
+        flex: 1;
+        padding: 0.5rem;
+    }
+
+    .item-conversa {
+        padding: 0.8rem;
+        border-radius: 6px;
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid transparent;
+        transition: all 0.2s ease;
+    }
+    .item-conversa:hover {
+        background: rgba(128, 213, 201, 0.08);
+    }
+    .item-conversa.ativo {
+        background: rgba(128, 213, 201, 0.15);
+        border-color: #80D5C9;
+    }
+
+    /* Coluna Direita: Detalhes e Chat */
+    .coluna-chat {
+        flex: 1.5;
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 6px;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .chat-header {
+        padding: 1rem;
+        background: rgba(0, 0, 0, 0.2);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .chat-mensagens {
+        flex: 1;
+        padding: 1rem;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 0.8rem;
+    }
+
+    .balao-msg {
+        max-width: 80%;
+        padding: 0.8rem 1rem;
+        border-radius: 8px;
+        font-size: 0.9rem;
+        line-height: 1.4;
+    }
+    .balao-msg.recebida {
+        background: rgba(255, 255, 255, 0.08);
+        align-self: flex-start;
+        border-bottom-left-radius: 2px;
+    }
+    .balao-msg.enviada {
+        background: #80D5C9;
+        color: #002B49;
+        align-self: flex-end;
+        border-bottom-right-radius: 2px;
+    }
+
+    .chat-footer {
+        padding: 1rem;
+        background: rgba(0, 0, 0, 0.2);
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .input-chat {
+        flex: 1;
+        padding: 0.8rem 1rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+        color: #FFFFFF;
+        font-family: var(--fonte-principal);
+        font-size: 0.95rem;
+    }
+
+    .btn-enviar-chat {
+        background-color: #80D5C9;
+        color: #002B49;
+        border: none;
+        padding: 0 1.5rem;
+        border-radius: 6px;
+        font-weight: 600;
+        cursor: pointer;
+        text-transform: uppercase;
+        font-size: 0.9rem;
+    }
+    .btn-enviar-chat:hover { background-color: #fff; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-atendimento">
+    <a href="/" class="btn-fechar-form" title="Fechar">&times;</a>
+
+    <header class="header-pagina">
+        <h1>Central de Atendimento e Mensagens</h1>
+    </header>
+
+    <div class="painel-principal">
+        <!-- Coluna da Esquerda: Lista -->
+        <div class="coluna-conversas">
+            <div class="abas-conversas">
+                <button type="button" class="aba-conv-btn ativa" onclick="mudarAbaConversas('visitantes')">Visitantes</button>
+                <button type="button" class="aba-conv-btn" onclick="mudarAbaConversas('alunos')">Alunos</button>
+            </div>
+            <div id="listaVisitantes" class="lista-itens">
+                {% for v in visitantes %}
+                <div class="item-conversa" onclick="carregarConversa('visitante', {{ v.id }}, '{{ v.nome_responsavel }}', '{{ v.telefone }}', '{{ v.email }}')">
+                    <strong style="color: #80D5C9; display: block;">{{ v.nome_responsavel }}</strong>
+                    <span style="font-size: 0.8rem; color: rgba(255,255,255,0.7); display: block;">Criança: {{ v.nome_crianca or 'Não informado' }}</span>
+                    <span style="font-size: 0.75rem; color: rgba(255,255,255,0.6); display: block;">E-mail: {{ v.email or 'Não informado' }}</span>
+                    <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-top: 2px;">Tel: <span class="tel-formatado">{{ v.telefone }}</span></div>
+                </div>
+                {% else %}
+                <div style="padding: 1rem; text-align: center; color: rgba(255,255,255,0.5); font-size: 0.85rem;">Nenhum visitante cadastrado.</div>
+                {% endfor %}
+            </div>
+            <div id="listaAlunos" class="lista-itens" style="display: none;">
+                <div style="padding: 1rem; text-align: center; color: rgba(255,255,255,0.5); font-size: 0.85rem;">Nenhuma conversa de aluno iniciada.</div>
+            </div>
+        </div>
+
+        <!-- Coluna da Direita: Chat e Detalhes -->
+        <div class="coluna-chat">
+            <div class="chat-header" id="chatHeaderInfo">
+                <span style="color: rgba(255,255,255,0.5); font-size: 0.9rem;">Selecione uma conversa ao lado para iniciar o atendimento.</span>
+            </div>
+            
+            <div class="chat-mensagens" id="chatMensagensContainer">
+                <!-- Histórico de mensagens injetado via JS -->
+            </div>
+
+            <div class="chat-footer" id="chatFooterForm" style="display: none;">
+                <div style="display: flex; gap: 0.8rem; width: 100%;">
+                    <input type="hidden" id="chatTipoAtual" value="">
+                    <input type="hidden" id="chatIdAtual" value="">
+                    <input type="text" id="inputMensagem" class="input-chat" placeholder="Digite sua resposta...">
+                    <button type="button" class="btn-enviar-chat" onclick="enviarMensagemChat()">Enviar</button>
+                </div>
+                <div id="statusEnvio" style="font-size: 0.85rem; font-weight: 600; min-height: 1.2rem; display: none; padding: 2px 4px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Aplica máscara de telefone automaticamente se a função estiver disponível no validacoes.js
+    document.addEventListener("DOMContentLoaded", function() {
+        document.querySelectorAll('.tel-formatado').forEach(el => {
+            let val = el.innerText.trim();
+            if (typeof aplicarMascaraTelefone === 'function') {
+                el.innerText = aplicarMascaraTelefone(val);
+            } else if (val.length === 11) {
+                el.innerText = `(${val.substring(0,2)}) ${val.substring(2,7)}-${val.substring(7)}`;
+            } else if (val.length === 10) {
+                el.innerText = `(${val.substring(0,2)}) ${val.substring(2,6)}-${val.substring(6)}`;
+            }
+        });
+    });
+
+    function mudarAbaConversas(tipo) {
+        document.querySelectorAll('.aba-conv-btn').forEach(b => b.classList.remove('ativa'));
+        if (tipo === 'visitantes') {
+            event.target.classList.add('ativa');
+            document.getElementById('listaVisitantes').style.display = 'block';
+            document.getElementById('listaAlunos').style.display = 'none';
+        } else {
+            event.target.classList.add('ativa');
+            document.getElementById('listaVisitantes').style.display = 'none';
+            document.getElementById('listaAlunos').style.display = 'block';
+        }
+    }
+
+    function carregarConversa(tipo, id, nome, telefone, email) {
+        document.querySelectorAll('.item-conversa').forEach(el => el.classList.remove('ativo'));
+        event.currentTarget.classList.add('ativo');
+
+        // Formata o telefone para exibição no cabeçalho
+        let telFormatado = telefone;
+        if (telefone.length === 11) {
+            telFormatado = `(${telefone.substring(0,2)}) ${telefone.substring(2,7)}-${telefone.substring(7)}`;
+        } else if (telefone.length === 10) {
+            telFormatado = `(${telefone.substring(0,2)}) ${telefone.substring(2,6)}-${telefone.substring(6)}`;
+        }
+
+        document.getElementById('chatTipoAtual').value = tipo;
+        document.getElementById('chatIdAtual').value = id;
+        document.getElementById('chatHeaderInfo').innerHTML = `
+            <strong style="color: #80D5C9; font-size: 1rem; display: block;">${nome}</strong>
+            <span style="font-size: 0.8rem; color: rgba(255,255,255,0.7);">Telefone: ${telFormatado} | E-mail: ${email || 'Não informado'}</span>
+        `;
+        document.getElementById('chatFooterForm').style.display = 'flex';
+
+        // Busca as mensagens via API
+        fetch(`/api/atendimento/mensagens?tipo=${tipo}&id=${id}`)
+            .then(res => res.json())
+            .then(data => {
+                const container = document.getElementById('chatMensagensContainer');
+                container.innerHTML = '';
+                if (data.sucesso && data.mensagens.length > 0) {
+                    data.mensagens.forEach(m => {
+                        const classe = m.remetente === 'escola' ? 'enviada' : 'recebida';
+                        container.insertAdjacentHTML('beforeend', `<div class="balao-msg ${classe}">${m.mensagem}</div>`);
+                    });
+                    container.scrollTop = container.scrollHeight;
+                } else {
+                    container.innerHTML = '<div style="text-align: center; color: rgba(255,255,255,0.4); font-size: 0.85rem; margin-top: auto; margin-bottom: auto;">Nenhuma mensagem neste histórico.</div>';
+                }
+            });
+    }
+
+    function enviarMensagemChat() {
+        const tipo = document.getElementById('chatTipoAtual').value;
+        const id = document.getElementById('chatIdAtual').value;
+        const input = document.getElementById('inputMensagem');
+        const mensagem = input.value.trim();
+        const statusDiv = document.getElementById('statusEnvio');
+
+        if (!mensagem) return;
+
+        const formData = new FormData();
+        formData.append('tipo', tipo);
+        formData.append('id', id);
+        formData.append('mensagem', mensagem);
+
+        statusDiv.style.display = 'block';
+        statusDiv.style.color = '#FFA500';
+        statusDiv.innerText = 'Enviando resposta...';
+
+        fetch('/api/atendimento/enviar', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.sucesso) {
+                const container = document.getElementById('chatMensagensContainer');
+                container.insertAdjacentHTML('beforeend', `<div class="balao-msg enviada">${mensagem}</div>`);
+                container.scrollTop = container.scrollHeight;
+                input.value = '';
+                
+                statusDiv.style.color = '#80D5C9';
+                statusDiv.innerText = '✓ Mensagem enviada com sucesso!';
+            } else {
+                statusDiv.style.color = '#ff6b6b';
+                statusDiv.innerText = '✕ ' + (data.msg || 'Erro ao enviar mensagem.');
+            }
+
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+                statusDiv.innerText = '';
+            }, 4000);
+        })
+        .catch(err => {
+            console.error(err);
+            statusDiv.style.color = '#ff6b6b';
+            statusDiv.innerText = '✕ Erro de conexão ao tentar enviar.';
+        });
+    }
+</script>
+{% endblock %}

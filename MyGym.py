@@ -83,6 +83,25 @@ app = Flask(__name__)
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.secret_key = os.getenv('SECRET_KEY', 'chave_padrao_fallback')
 
+@app.context_processor
+def injetar_contador_atendimento():
+    total_nao_lidas = 0
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            # Conta quantos visitantes estão cadastrados aguardando interação ou análise
+            cursor.execute("SELECT COUNT(*) FROM visitantes")
+            row = cursor.fetchone()
+            if row:
+                total_nao_lidas = row[0]
+        except Exception as e:
+            print(f"Erro ao contar mensagens/visitantes pendentes: {e}")
+        finally:
+            cursor.close()
+            conn.close()
+    return dict(total_nao_lidas=total_nao_lidas)
+
 def enviar_email_html(destinatario, assunto, corpo_html):
     smtp_host = os.getenv('EMAIL_HOST')
     smtp_port = int(os.getenv('EMAIL_PORT', 587))
@@ -1864,6 +1883,115 @@ def salvar_visitante():
             conn.close()
             
     return jsonify({'sucesso': False, 'msg': 'Erro de conexão com o banco de dados.'})
+
+# ==============================================================================
+# ROTAS DA CENTRAL DE ATENDIMENTO E COMUNICAÇÃO
+# ==============================================================================
+
+@app.route('/backoffice/atendimento')
+@requer_permissao('mod_atendimento')
+def central_atendimento():
+    conn = get_connection()
+    visitantes = []
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, nome_responsavel, telefone, email, nome_crianca, perfil_necessidade, created_at FROM visitantes ORDER BY id DESC")
+            rows = cursor.fetchall()
+            for r in rows:
+                visitantes.append({
+                    'id': r[0],
+                    'nome_responsavel': r[1],
+                    'telefone': r[2],
+                    'email': r[3],
+                    'nome_crianca': r[4],
+                    'perfil_necessidade': r[5],
+                    'created_at': str(r[6])
+                })
+        except Exception as e:
+            print(f"Erro ao buscar visitantes para atendimento: {e}")
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return render_template('backoffice/atendimento.html', visitantes=visitantes)
+
+@app.route('/api/atendimento/mensagens', methods=['GET'])
+@requer_permissao('mod_atendimento')
+def api_buscar_mensagens():
+    tipo = request.args.get('tipo')
+    reg_id = request.args.get('id')
+    
+    conn = get_connection()
+    mensagens = []
+    if conn:
+        try:
+            cursor = conn.cursor()
+            if tipo == 'visitante':
+                cursor.execute("SELECT remetente_tipo, mensagem, created_at FROM comunicacao_mensagens WHERE visitante_id = %s ORDER BY id ASC", (reg_id,))
+            else:
+                cursor.execute("SELECT remetente_tipo, mensagem, created_at FROM comunicacao_mensagens WHERE aluno_id = %s ORDER BY id ASC", (reg_id,))
+                
+            rows = cursor.fetchall()
+            for r in rows:
+                rem = 'escola' if r[0] == 'escola' else 'outro'
+                mensagens.append({
+                    'remetente': rem,
+                    'mensagem': r[1],
+                    'created_at': str(r[2])
+                })
+            return jsonify({'sucesso': True, 'mensagens': mensagens})
+        except Exception as e:
+            print(f"Erro ao buscar mensagens do chat: {e}")
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return jsonify({'sucesso': False, 'mensagens': []})
+
+@app.route('/api/atendimento/enviar', methods=['POST'])
+@requer_permissao('mod_atendimento')
+def api_enviar_mensagem():
+    tipo = request.form.get('tipo')
+    reg_id = request.form.get('id')
+    mensagem = request.form.get('mensagem')
+    usuario_id = 1 # ID padrão ou session.get('usuario_id')
+    
+    if not reg_id or not mensagem:
+        return jsonify({'sucesso': False, 'msg': 'Dados incompletos.'})
+        
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            if tipo == 'visitante':
+                sql = "INSERT INTO comunicacao_mensagens (visitante_id, remetente_tipo, usuario_id, mensagem) VALUES (%s, 'escola', %s, %s)"
+                cursor.execute(sql, (reg_id, usuario_id, mensagem))
+                
+                # Opcional: Buscar e-mail do visitante para enviar notificação
+                cursor.execute("SELECT email, nome_responsavel, token_acesso FROM visitantes WHERE id = %s", (reg_id,))
+                v = cursor.fetchone()
+                if v and v[0]:
+                    email_dest = v[0]
+                    nome_resp = v[1]
+                    token = v[2]
+                    link_conversa = f"http://127.0.0.1:5000/atendimento/visitante/{token}"
+                    corpo = f"Olá, {nome_resp}.\n\nA escola respondeu à sua mensagem:\n\n\"{mensagem}\"\n\nVocê pode ver o histórico completo e responder acessando o link:\n{link_conversa}\n\nEquipe MyGym"
+                    enviar_email_html(email_dest, "MyGym - Nova resposta da escola", f"<p>{corpo.replace(chr(10), '<br>')}</p>")
+            else:
+                sql = "INSERT INTO comunicacao_mensagens (aluno_id, remetente_tipo, usuario_id, mensagem) VALUES (%s, 'escola', %s, %s)"
+                cursor.execute(sql, (reg_id, usuario_id, mensagem))
+                
+            conn.commit()
+            return jsonify({'sucesso': True})
+        except Exception as e:
+            print(f"Erro ao enviar resposta no atendimento: {e}")
+            conn.rollback()
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return jsonify({'sucesso': False, 'msg': 'Erro interno ao salvar.'})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)

@@ -23,6 +23,7 @@ HISTÓRICO DE ALTERAÇÕES:
 19/08/26: Inclusão do link para Quadro de Vagas e verificação da permissão mod_grade no menu Backoffice.
 19/08/26: Inclusão do link para Tabela de Preços e verificação da permissão mod_precos no menu Backoffice.
 22/08/26: Criação do efeito sanfona (submenu) integrado ao menu Backoffice para aninhar Tipos de Remuneração.
+15/10/26: Inclusão do link Central de Atendimento no menu Backoffice com validação da permissão mod_atendimento.
 ============================================================================== 
 #}
 
@@ -324,7 +325,7 @@ HISTÓRICO DE ALTERAÇÕES:
             {% set is_free = p.get('mod_free') %}
 
             {# BLOCO 1: BACKOFFICE #}
-            {% if is_free or p.get('mod_cad_func') or p.get('mod_cad_prof') or p.get('mod_cad_aluno') or p.get('mod_cad_perm') or p.get('mod_matricula') or p.get('mod_cad_turma') or p.get('mod_grade') or p.get('mod_precos') %}
+            {% if is_free or p.get('mod_cad_func') or p.get('mod_cad_prof') or p.get('mod_cad_aluno') or p.get('mod_cad_perm') or p.get('mod_matricula') or p.get('mod_cad_turma') or p.get('mod_grade') or p.get('mod_precos') or p.get('mod_atendimento') %}
             <div class="dropdown">
                 <a href="javascript:void(0)">Backoffice <i class="fas fa-caret-down" style="font-size: 0.9em; margin-left: 4px;"></i></a>
                 <div class="dropdown-content">
@@ -357,6 +358,17 @@ HISTÓRICO DE ALTERAÇÕES:
 
                     {% if is_free or p.get('mod_precos') %}
                     <a href="/backoffice/precos">Tabela de Preços</a>
+                    {% endif %}
+
+                    {% if is_free or p.get('mod_atendimento') %}
+                    <a href="/backoffice/atendimento" style="display: flex; justify-content: space-between; align-items: center; white-space: nowrap;">
+                        <span>Central de Atendimento</span>
+                        {% if total_nao_lidas and total_nao_lidas > 0 %}
+                        <span style="background-color: #ffffff; color: #002B49; padding: 0.1rem 0.4rem; border-radius: 10px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">
+                            {{ total_nao_lidas }}
+                        </span>
+                        {% endif %}
+                    </a>
                     {% endif %}
                     
                     {% if is_free or p.get('mod_cad_perm') %}
