@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mercado - Scanner</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+body{font-family:sans-serif;padding:15px;background:#f5f5f5}
+#reader{width:100%;border-radius:12px;overflow:hidden}
+.card{background:#fff;padding:12px;margin:10px 0;border-radius:10px;display:flex;justify-content:space-between;align-items:center;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.line1{font-weight:bold;font-size:15px}
+.line2{font-size:13px;color:#555;margin-top:3px}
+.line2 b{color:#000}
+.total{background:#16a34a;color:#fff;padding:15px;border-radius:10px;margin-top:15px;text-align:center;font-size:18px;font-weight:bold}
+button{padding:12px 16px;border:none;border-radius:8px;background:#16a34a;color:#fff;font-weight:bold;width:100%;margin-top:10px}
+button.sec{background:#ccc;color:#333}
+.qtdBtn{width:32px;height:32px;padding:0;border-radius:50%;font-size:18px;margin:0 4px}
+input{padding:12px;width:100%;box-sizing:border-box;border:1px solid #ddd;border-radius:8px;margin-top:8px}
+.row{display:flex;gap:8px}
+</style>
+</head>
+<body>
+<h2>🛒 Meu Mercado</h2>
+<div id="reader"></div>
+<button id="btnScan">📷 ESCANEAR PRODUTO</button>
+<div id="lista"></div>
+<div id="total" class="total" style="display:none"></div>
+
+<div id="modalNome" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.6);align-items:center;justify-content:center;padding:20px;z-index:99">
+  <div style="background:#fff;padding:20px;border-radius:12px;width:100%;max-width:400px">
+    <h3>Código: <span id="codigoTemp"></span></h3>
+    <input id="inputNome" placeholder="Nome do produto">
+    <div class="row">
+      <input id="inputValor" type="number" step="0.01" inputmode="decimal" placeholder="Valor unit R$">
+      <input id="inputQtd" type="number" min="1" value="1" placeholder="Qtd">
+    </div>
+    <button id="btnSalvarNome">Salvar</button>
+    <button id="btnCancelar" class="sec">Cancelar</button>
+  </div>
+</div>
+
+<script>
+let produtos = JSON.parse(localStorage.getItem('produtos')||'[]');
+let nomes = JSON.parse(localStorage.getItem('nomesProdutos')||'{}');
+let valores = JSON.parse(localStorage.getItem('valoresProdutos')||'{}');
+let codigoAtual = '';
+let html5QrCode;
+
+function renderLista(){
+  const div = document.getElementById('lista');
+  const divTotal = document.getElementById('total');
+  if(produtos.length===0){ div.innerHTML='<p>Nenhum produto ainda</p>'; divTotal.style.display='none'; return; }
+  
+  let totalGeral = 0;
+  div.innerHTML = '<h3>Lista:</h3>' + produtos.map((p,i)=>{
+    const nomeSalvo = nomes[p.codigo] || valores[p.codigo]?.nome || p.nome || '...';
+    const valorUnit = parseFloat(p.valor || valores[p.codigo]?.valor || 0);
+    const qtd = parseInt(p.qtd) || 1;
+    const totalItem = valorUnit * qtd;
+    if(valorUnit) totalGeral += totalItem;
+    
+    // Linha 1: Nome + valor unitário
+    // Linha 2: Código + qtd + valor total do item
+    const linha1 = valorUnit ? `${nomeSalvo} - R$ ${valorUnit.toFixed(2)}` : `${nomeSalvo}`;
+    const linha2 = valorUnit ? `${p.codigo} - ${qtd}x = <b>R$ ${totalItem.toFixed(2)}</b>` : `${p.codigo} - ${qtd}x`;
+
+    return `<div class="card">
+      <div><div class="line1">${linha1}</div><div class="line2">${linha2}</div></div>
+      <div style="display:flex;align-items:center">
+        <button class="qtdBtn sec" onclick="alterarQtd(${i},-1)">-</button>
+        <span>${qtd}</span>
+        <button class="qtdBtn" onclick="alterarQtd(${i},1)">+</button>
+      </div>
+    </div>`;
+  }).join('');
+  
+  divTotal.style.display='block';
+  divTotal.innerText = `TOTAL GERAL: R$ ${totalGeral.toFixed(2)}`;
+}
+
+function alterarQtd(index, delta){
+  produtos[index].qtd = Math.max(1, (produtos[index].qtd || 1) + delta);
+  if(produtos[index].qtd <=0) produtos.splice(index,1);
+  salvar();
+}
+
+function adicionarProduto(codigo){
+  codigo = codigo.trim();
+  codigoAtual = codigo;
+  const ex = produtos.find(p=>p.codigo===codigo);
+  
+  document.getElementById('codigoTemp').innerText = codigo;
+  document.getElementById('inputNome').value = nomes[codigo] || valores[codigo]?.nome || ex?.nome || '';
+  document.getElementById('inputValor').value = ex?.valor || valores[codigo]?.valor || '';
+  document.getElementById('inputQtd').value = 1; // default = 1
+  
+  document.getElementById('modalNome').style.display='flex';
+}
+
+function salvar(){
+  localStorage.setItem('produtos', JSON.stringify(produtos));
+  localStorage.setItem('nomesProdutos', JSON.stringify(nomes));
+  localStorage.setItem('valoresProdutos', JSON.stringify(valores));
+  renderLista();
+}
+
+document.getElementById('btnSalvarNome').onclick = ()=>{
+  const nome = document.getElementById('inputNome').value.trim();
+  const valor = document.getElementById('inputValor').value.trim();
+  const qtd = Math.max(1, parseInt(document.getElementById('inputQtd').value) || 1);
+
+  if(nome) nomes[codigoAtual] = nome;
+  if(nome || valor) valores[codigoAtual] = {nome: nome, valor: valor};
+
+  const ex = produtos.find(p=>p.codigo===codigoAtual);
+  if(ex){
+    ex.qtd = (parseInt(ex.qtd)||0) + qtd;
+    if(nome) ex.nome = nome;
+    if(valor) ex.valor = valor;
+  } else {
+    produtos.push({codigo:codigoAtual, nome:nome||'', valor:valor||'', qtd:qtd});
+  }
+  
+  document.getElementById('modalNome').style.display='none';
+  salvar();
+};
+
+document.getElementById('btnCancelar').onclick = ()=>{ document.getElementById('modalNome').style.display='none'; };
+
+document.getElementById('btnScan').onclick = ()=>{
+  if(!html5QrCode) html5QrCode = new Html5Qrcode("reader");
+  html5QrCode.start({facingMode:"environment"}, {fps:10, qrbox:250},
+    (d)=>{ html5QrCode.stop(); adicionarProduto(d); }, ()=>{}
+  ).catch(e=>alert('Use https e permita câmera'));
+};
+
+renderLista();
+</script>
+</body>
+</html>

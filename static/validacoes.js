@@ -13,6 +13,7 @@
 // 14/08/26: Inclusão da função aplicarMascaraCPFOuMatricula para busca dinâmica de alunos.
 // 14/08/26: Inclusão da função formatarMatriculaBlur para preenchimento de zeros à esquerda (ex: 0001).
 // 17/08/26: Inclusão da função global monitorarAlteracoes para controle inteligente do botão Salvar.
+// 22/08/26: Inclusão da função monitorarAbandonoFunil para limpeza automática do sessionStorage em abandonos de fluxo.
 // ==============================================================================
 
 // --- FUNÇÕES DE MÁSCARA E LIMPEZA ---
@@ -281,3 +282,38 @@ function ativarPreviewImagem(inputElement, imgElement, placeholderElement) {
         }
     });
 }
+
+// ==============================================================================
+// FUNÇÕES DE GESTÃO DE ESTADO E SESSÃO (CARRINHO)
+// ==============================================================================
+
+function monitorarAbandonoFunil() {
+    document.addEventListener('click', function(e) {
+        const link = e.target.closest('a');
+        if (!link) return;
+
+        const href = link.getAttribute('href');
+        // Ignora âncoras vazias ou links dinâmicos javascript
+        if (!href || href === '#' || href.startsWith('javascript:')) return;
+
+        // Define as rotas que FAZEM PARTE do funil de vendas (ponte inteligente)
+        const rotasFunil = [
+            '/backoffice/alunos',
+            '/backoffice/matriculas'
+        ];
+
+        const fazParteDoFunil = rotasFunil.some(rota => href.includes(rota));
+
+        // Se o usuário clicou em um link que sai do funil (ex: voltar para home "/")
+        // limpamos o carrinho da memória para não interferir em navegações futuras.
+        if (!fazParteDoFunil) {
+            sessionStorage.removeItem('mygym_carrinho_turmas');
+            sessionStorage.removeItem('mygym_planos_selecionados');
+        }
+    });
+}
+
+// Inicializa o monitoramento de abandono de funil automaticamente
+document.addEventListener("DOMContentLoaded", function() {
+    monitorarAbandonoFunil();
+});

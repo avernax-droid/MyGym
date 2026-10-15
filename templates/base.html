@@ -22,6 +22,7 @@ HISTÓRICO DE ALTERAÇÕES:
 18/08/26: Inclusão da permissão mod_cad_turma e do link Gestão de Turmas no menu Backoffice.
 19/08/26: Inclusão do link para Quadro de Vagas e verificação da permissão mod_grade no menu Backoffice.
 19/08/26: Inclusão do link para Tabela de Preços e verificação da permissão mod_precos no menu Backoffice.
+22/08/26: Criação do efeito sanfona (submenu) integrado ao menu Backoffice para aninhar Tipos de Remuneração.
 ============================================================================== 
 #}
 
@@ -99,7 +100,7 @@ HISTÓRICO DE ALTERAÇÕES:
             top: 100%;
             left: 0;
             background-color: #002B49; 
-            min-width: 200px;
+            min-width: 220px;
             box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
             z-index: 1;
             padding: 0.5rem 0;
@@ -116,6 +117,37 @@ HISTÓRICO DE ALTERAÇÕES:
             text-transform: none; 
             font-size: 0.95rem;
             letter-spacing: normal;
+        }
+
+        /* --- EFEITO SANFONA (SUBMENU) --- */
+        .sanfona-item {
+            display: flex;
+            flex-direction: column;
+        }
+        .sanfona-trigger {
+            display: flex !important;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .sanfona-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            background-color: rgba(0, 0, 0, 0.15); 
+        }
+        .sanfona-item:hover .sanfona-content {
+            max-height: 150px; 
+        }
+        .sanfona-content a {
+            padding: 0.7rem 1.5rem 0.7rem 2.5rem !important; 
+            font-size: 0.85rem !important;
+            color: #80D5C9 !important;
+            border-left: 3px solid #80D5C9;
+            white-space: nowrap; /* Impede a quebra de linha do submenu */
+        }
+        .sanfona-content a:hover {
+            color: #ffffff !important;
+            background-color: rgba(255, 255, 255, 0.05);
         }
 
         /* --- DESIGN SYSTEM GLOBAL: MODAIS E BOTÕES --- */
@@ -302,7 +334,17 @@ HISTÓRICO DE ALTERAÇÕES:
                     {% endif %}
                     
                     {% if is_free or p.get('mod_cad_prof') %}
-                    <a href="/backoffice/professores/novo">Cadastro Professor</a>
+                    <div class="sanfona-item">
+                        <a href="/backoffice/professores/novo" class="sanfona-trigger">
+                            <span>Cadastro Professor</span>
+                            <i class="fas fa-chevron-down" style="font-size: 0.7em; opacity: 0.6;"></i>
+                        </a>
+                        <div class="sanfona-content">
+                            <a href="/backoffice/remuneracoes">
+                                <i class="fas fa-level-up-alt fa-rotate-90" style="margin-right: 5px; opacity: 0.6;"></i> Tipos de Remuneração
+                            </a>
+                        </div>
+                    </div>
                     {% endif %}
                     
                     {% if is_free or p.get('mod_cad_aluno') %}

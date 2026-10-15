@@ -1,0 +1,321 @@
+{# ==============================================================================
+ PROJETO: MyGym
+ MÓDULO: templates/backoffice/tipos_remuneracao.html
+ DATA DE CRIAÇÃO: 22/08/26
+ TÍTULO: Gestão de Tipos de Remuneração
+ FUNÇÃO: Template para cadastro e manutenção da tabela de domínio 'tipos_remuneracao', 
+         permitindo alterar descrição, regra de cálculo e status.
+
+ HISTÓRICO DE ALTERAÇÕES:
+ 22/08/26: Criação inicial baseada no Design System global e integração com navegação via 'Enter'.
+ 22/08/26: Correção da tag de fechamento do bloco for (endfor).
+ 22/08/26: Refatoração para listagem editável e inclusão do botão Salvar no canto inferior direito.
+ 24/08/26: Ajuste para edição em lote e forçar tabela sem quebra de linha. Bloqueio inteligente do botão Salvar.[cite: 2]
+============================================================================== #}
+
+{% extends "base.html" %}
+
+{% block title %}Tipos de Remuneração - MyGym{% endblock %}
+
+{% block head %}
+<style>
+    .container-listagem {
+        background-color: #001524;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 2.5rem 3rem;
+        border-radius: 8px;
+        width: 100%;
+        max-width: 900px;
+        box-shadow: 0px 15px 35px rgba(0, 0, 0, 0.5);
+        color: #FFFFFF;
+        box-sizing: border-box;
+        position: relative;
+        max-height: 90vh;
+        overflow-y: auto; 
+    }
+
+    .btn-fechar-form {
+        position: absolute;
+        top: 1rem;
+        right: 1.5rem;
+        font-size: 1.8rem;
+        color: #FFFFFF;
+        text-decoration: none;
+        opacity: 0.6;
+        transition: opacity 0.3s ease;
+        line-height: 1;
+    }
+
+    .btn-fechar-form:hover {
+        opacity: 1;
+    }
+
+    .header-pagina {
+        text-align: left;
+        margin-bottom: 1.5rem;
+    }
+
+    .header-pagina h1 {
+        font-size: 1.8rem;
+        font-weight: 600;
+        margin: 0;
+        letter-spacing: 1px;
+        color: #FFFFFF;
+    }
+
+    .form-linha {
+        display: flex;
+        gap: 1.5rem;
+        margin-bottom: 1rem;
+        align-items: center;
+    }
+
+    .form-grupo {
+        margin-bottom: 1rem;
+        text-align: left;
+        width: 100%;
+    }
+
+    .form-grupo label {
+        display: block;
+        margin-bottom: 0.4rem;
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.8);
+    }
+
+    .input-limpo {
+        width: 100%;
+        padding: 0.8rem 1rem;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        background-color: rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+        color: #FFFFFF;
+        font-family: var(--fonte-principal);
+        font-size: 0.95rem;
+        box-sizing: border-box;
+        transition: all 0.3s ease;
+    }
+
+    .input-limpo:focus {
+        outline: none;
+        border-color: #80D5C9;
+        background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    select.input-limpo {
+        appearance: none;
+        background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+        background-repeat: no-repeat;
+        background-position: right 1rem top 50%;
+        background-size: 0.65rem auto;
+        cursor: pointer;
+    }
+
+    select.input-limpo option {
+        background-color: #002B49;
+        color: #FFFFFF;
+    }
+
+    .form-acoes {
+        display: flex;
+        justify-content: flex-end;
+        gap: 1rem;
+        margin-top: 2rem;
+    }
+
+    .btn-custom {
+        padding: 0.9rem 2.5rem;
+        border-radius: 6px;
+        font-family: var(--fonte-principal);
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        text-decoration: none;
+        text-align: center;
+        transition: all 0.3s ease;
+        border: none;
+    }
+
+    .btn-salvar {
+        background-color: #80D5C9;
+        color: #002B49;
+    }
+
+    .btn-salvar:hover:not(:disabled) {
+        background-color: #ffffff;
+    }
+
+    .btn-salvar:disabled {
+        background-color: #3b5a6c;
+        color: #6a8899;
+        cursor: not-allowed;
+    }
+
+    .btn-cancelar {
+        background-color: transparent;
+        color: rgba(255, 255, 255, 0.7);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-cancelar:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+        color: #FFFFFF;
+    }
+
+    .divisor-secao {
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        margin: 1.5rem 0 1rem 0;
+        padding-bottom: 0.5rem;
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.9);
+    }
+
+    .tabela-edicao {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.9rem;
+        white-space: nowrap; /* Impede a quebra de linha na tabela */
+    }
+
+    .tabela-edicao th, .tabela-edicao td {
+        padding: 0.8rem;
+        text-align: left;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        vertical-align: middle;
+    }
+
+    .tabela-edicao th {
+        color: #80D5C9;
+        font-weight: 600;
+        background-color: rgba(255, 255, 255, 0.02);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-listagem">
+    <a href="/" class="btn-fechar-form" title="Fechar">&times;</a>
+
+    <header class="header-pagina">
+        <h1>Tipos de Remuneração</h1>
+    </header>
+
+    <form id="formRemuneracao" action="/backoffice/remuneracoes/salvar" method="POST">
+        
+        <div class="divisor-secao" style="margin-top: 0;">Adicionar Novo Modelo</div>
+        <div class="form-linha">
+            <div class="form-grupo" style="flex: 2; margin-bottom: 0;">
+                <label for="novo_descricao">Descrição</label>
+                <input type="text" id="novo_descricao" name="novo_descricao" placeholder="Ex: Salário Fixo" class="input-limpo">
+            </div>
+            
+            <div class="form-grupo" style="flex: 1.5; margin-bottom: 0;">
+                <label for="novo_regra">Regra de Cálculo</label>
+                <select id="novo_regra" name="novo_regra" class="input-limpo">
+                    <option value="">Selecione...</option>
+                    <option value="CALC_HORA">Valor / Hora</option>
+                    <option value="CALC_AULA">Valor / Aula</option>
+                    <option value="CALC_MENSAL">Mensalidade Fixa</option>
+                    <option value="CALC_PERCENTUAL">Comissão (%)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="divisor-secao">Modelos Cadastrados</div>
+
+        <div style="overflow-x: auto;">
+            <table class="tabela-edicao">
+                <thead>
+                    <tr>
+                        <th style="width: 5%;">ID</th>
+                        <th style="width: 45%;">Descrição</th>
+                        <th style="width: 30%;">Regra de Cálculo</th>
+                        <th style="width: 20%;">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if remuneracoes %}
+                        {% for rem in remuneracoes %}
+                        <tr>
+                            <td style="color: rgba(255,255,255,0.5);">
+                                #{{ rem.id }}
+                                <input type="hidden" name="id[]" value="{{ rem.id }}">
+                            </td>
+                            <td>
+                                <input type="text" name="descricao[]" value="{{ rem.descricao }}" required class="input-limpo">
+                            </td>
+                            <td>
+                                <select name="regra_calculo[]" required class="input-limpo">
+                                    <option value="CALC_HORA" {% if rem.regra_calculo == 'CALC_HORA' %}selected{% endif %}>Valor / Hora</option>
+                                    <option value="CALC_AULA" {% if rem.regra_calculo == 'CALC_AULA' %}selected{% endif %}>Valor / Aula</option>
+                                    <option value="CALC_MENSAL" {% if rem.regra_calculo == 'CALC_MENSAL' %}selected{% endif %}>Mensalidade Fixa</option>
+                                    <option value="CALC_PERCENTUAL" {% if rem.regra_calculo == 'CALC_PERCENTUAL' %}selected{% endif %}>Comissão (%)</option>
+                                </select>
+                            </td>
+                            <td>
+                                <select name="status[]" required class="input-limpo">
+                                    <option value="ativo" {% if rem.status == 'ativo' %}selected{% endif %}>Ativo</option>
+                                    <option value="inativo" {% if rem.status == 'inativo' %}selected{% endif %}>Inativo</option>
+                                </select>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="4" style="text-align: center; color: rgba(255,255,255,0.5); padding: 2rem;">
+                                Nenhum modelo de remuneração cadastrado.
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="form-acoes">
+            <a href="/" class="btn-custom btn-cancelar">Cancelar</a>
+            <button type="submit" id="btnSalvar" class="btn-custom btn-salvar" disabled>Salvar</button>
+        </div>
+        
+    </form>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const form = document.getElementById("formRemuneracao");
+        
+        // Função simples para validação do formulário (sempre retorna true, pois os campos obrigatórios já têm 'required' no HTML,
+        // mas garante compatibilidade com o validacoes.js)
+        function validarFormRemuneracao() {
+            return true; 
+        }
+
+        // Se a função global do validacoes.js existir, atrela ao formulário
+        if (typeof monitorarAlteracoes === 'function') {
+            monitorarAlteracoes('formRemuneracao', 'btnSalvar', validarFormRemuneracao);
+        } else {
+            // Fallback caso o script demore a carregar
+            document.getElementById('btnSalvar').disabled = false;
+        }
+
+        form.addEventListener("keydown", function(e) {
+            if (e.key === "Enter") {
+                const target = e.target;
+                if (target.tagName.toLowerCase() === 'button') return;
+                
+                e.preventDefault(); 
+                const focusableElements = Array.from(form.querySelectorAll(
+                    'input:not([type="hidden"]):not([disabled]):not([readonly]), select:not([disabled]):not([readonly]), button:not([disabled])'
+                ));
+
+                const index = focusableElements.indexOf(target);
+                if (index > -1 && index < focusableElements.length - 1) {
+                    focusableElements[index + 1].focus();
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

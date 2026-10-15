@@ -1,0 +1,36 @@
+{# 
+==============================================================================
+PROJETO: MyGym
+MÓDULO: templates/componentes/modal_boas_vindas.html
+DATA DE CRIAÇÃO: 15/10/26
+TÍTULO: Componente Modal de Boas-Vindas e Escolha Inicial
+FUNÇÃO: Apresentar ao visitante a opção entre acessar a plataforma (login) 
+        ou conhecer a metodologia e o projeto institucional.
+
+HISTÓRICO DE ALTERAÇÕES:
+15/10/26: Criação inicial do modal de escolha para visitantes e usuários.
+============================================================================== 
+#}
+
+<div id="modalBoasVindas" class="modal-overlay">
+    <div class="modal-content" style="max-width: 420px; text-align: center;">
+        <button class="btn-fechar fechar-modal-boas-vindas">&times;</button>
+        
+        <h2 class="modal-title" style="margin-bottom: 0.8rem;">Bem-vindo ao MyGym</h2>
+        <p style="font-size: 0.95rem; color: rgba(255, 255, 255, 0.75); margin-bottom: 2rem; line-height: 1.5; white-space: normal;">
+            Como podemos ajudar você hoje? Escolha uma das opções abaixo:
+        </p>
+        
+        <div style="display: flex; flex-direction: column; gap: 1rem; margin-bottom: 1.5rem;">
+            <!-- Opção 1: Conhecer o trabalho (Visitantes) -->
+            <button type="button" id="btnEscolherConhecer" class="btn-acao" style="margin: 0; background-color: #80D5C9; color: #002B49;">
+                <i class="fas fa-heart" style="margin-right: 8px;"></i> Venha nos Conhecer
+            </button>
+
+            <!-- Opção 2: Acessar a Plataforma (Login) -->
+            <button type="button" id="btnEscolherLogin" class="btn-custom btn-cancelar" style="width: 100%; padding: 1rem; font-size: 1.1rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; border-radius: 8px;">
+                <i class="fas fa-sign-in-alt" style="margin-right: 8px;"></i> Acessar Plataforma
+            </button>
+        </div>
+    </div>
+</div>

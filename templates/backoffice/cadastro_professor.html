@@ -26,6 +26,8 @@
  10/08/26: Correção na aplicação da máscara visual do campo Telefone principal herdado do RH.
  13/08/26: Refatoração estrutural (DRY): Extração do popup de modalidades para um componente centralizado (modal_modalidades.html).
  17/08/26: Integração da função global monitorarAlteracoes para controle inteligente do botão Salvar.
+ 22/08/26: Inclusão da seção Contrato e Remuneração (tipo de pagamento e valor financeiro) na ficha do professor.
+ 22/08/26: Refatoração do select de remuneração para consumo dinâmico via API (tabela de domínio tipos_remuneracao).
 ============================================================================== #}
 
 {% extends "base.html" %}
@@ -129,6 +131,21 @@
         outline: none;
         border-color: #80D5C9;
         background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    /* Estilo atualizado para campos select */
+    select.input-limpo {
+        appearance: none;
+        background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23FFFFFF%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E");
+        background-repeat: no-repeat;
+        background-position: right 1rem top 50%;
+        background-size: 0.65rem auto;
+        cursor: pointer;
+    }
+
+    select.input-limpo option {
+        background-color: #002B49;
+        color: #FFFFFF;
     }
 
     .msg-erro {
@@ -362,6 +379,23 @@
                 </div>
             </div>
 
+            <!-- NOVA SEÇÃO: CONTRATO E REMUNERAÇÃO (DINÂMICO VIA API) -->
+            <div class="divisor-secao">Contrato e Remuneração</div>
+            <div class="form-linha">
+                <div class="form-grupo form-metade">
+                    <label for="tipo_remuneracao_id">Modelo de Pagamento *</label>
+                    <select id="tipo_remuneracao_id" name="tipo_remuneracao_id" required class="input-limpo campo-validavel">
+                        <option value="">Carregando opções...</option>
+                    </select>
+                </div>
+                <div class="form-grupo form-metade">
+                    <label id="lbl_valor_remuneracao" for="valor_remuneracao">Valor (R$) *</label>
+                    <input type="text" id="valor_remuneracao" name="valor_remuneracao" required 
+                           placeholder="R$ 0,00" class="input-limpo campo-validavel">
+                    <span class="msg-erro" id-erro="valor_remuneracao">Preencha o valor da remuneração.</span>
+                </div>
+            </div>
+
             <div class="form-acoes">
                 <a href="/" class="btn-custom btn-cancelar">Cancelar</a>
                 <button type="submit" id="btnSalvar" class="btn-custom btn-salvar">Salvar</button>
@@ -388,6 +422,81 @@
         
         const inputTelEmergencia = document.getElementById("telefone_emergencia");
         
+        // --- DINÂMICA DA NOVA SEÇÃO DE REMUNERAÇÃO (VIA API) ---
+        const selTipoRemuneracao = document.getElementById("tipo_remuneracao_id");
+        const lblValorRemuneracao = document.getElementById("lbl_valor_remuneracao");
+        const inputValorRemuneracao = document.getElementById("valor_remuneracao");
+
+        // Busca os modelos ativos no banco de dados
+        fetch('/api/remuneracoes/ativas')
+            .then(res => res.json())
+            .then(data => {
+                selTipoRemuneracao.innerHTML = '<option value="">Selecione...</option>';
+                if (data.sucesso && data.remuneracoes.length > 0) {
+                    data.remuneracoes.forEach(rem => {
+                        const option = document.createElement('option');
+                        option.value = rem.id;
+                        option.textContent = rem.descricao;
+                        option.setAttribute('data-regra', rem.regra_calculo);
+                        selTipoRemuneracao.appendChild(option);
+                    });
+                } else {
+                    selTipoRemuneracao.innerHTML = '<option value="">Nenhum modelo cadastrado</option>';
+                }
+            })
+            .catch(err => {
+                console.error("Erro ao carregar tipos de remuneração:", err);
+                selTipoRemuneracao.innerHTML = '<option value="">Erro ao carregar</option>';
+            });
+
+        selTipoRemuneracao.addEventListener("change", function() {
+            const opcaoSelecionada = this.options[this.selectedIndex];
+            const regra = opcaoSelecionada ? opcaoSelecionada.getAttribute('data-regra') : null;
+            
+            inputValorRemuneracao.value = ""; 
+            
+            if (regra === "CALC_HORA") {
+                lblValorRemuneracao.textContent = "Valor da Hora (R$) *";
+                inputValorRemuneracao.placeholder = "R$ 0,00";
+            } else if (regra === "CALC_AULA") {
+                lblValorRemuneracao.textContent = "Valor por Aula (R$) *";
+                inputValorRemuneracao.placeholder = "R$ 0,00";
+            } else if (regra === "CALC_MENSAL") {
+                lblValorRemuneracao.textContent = "Salário Mensal (R$) *";
+                inputValorRemuneracao.placeholder = "R$ 0,00";
+            } else if (regra === "CALC_PERCENTUAL") {
+                lblValorRemuneracao.textContent = "Comissão / Repasse (%) *";
+                inputValorRemuneracao.placeholder = "0,00 %";
+            } else {
+                lblValorRemuneracao.textContent = "Valor *";
+                inputValorRemuneracao.placeholder = "0,00";
+            }
+        });
+
+        // Formatação Inteligente (Moeda ou Porcentagem)
+        function formatarValorDinamico(elemento, regra) {
+            let valor = elemento.value.replace(/\D/g, "");
+            if (valor === "") {
+                elemento.value = "";
+                return;
+            }
+            valor = (parseInt(valor) / 100).toFixed(2) + "";
+            valor = valor.replace(".", ",");
+            valor = valor.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
+            
+            if (regra === "CALC_PERCENTUAL") {
+                elemento.value = valor + " %";
+            } else {
+                elemento.value = "R$ " + valor;
+            }
+        }
+
+        inputValorRemuneracao.addEventListener("input", function() {
+            const opcaoSelecionada = selTipoRemuneracao.options[selTipoRemuneracao.selectedIndex];
+            const regraAtual = opcaoSelecionada ? opcaoSelecionada.getAttribute('data-regra') : null;
+            formatarValorDinamico(this, regraAtual);
+        });
+
         // --- CONTROLE DO POPUP DE MODALIDADES ---
         const modalModalidades = document.getElementById("modalModalidades");
         const btnAbrirModal = document.getElementById("btnAbrirModalModalidades");
@@ -563,6 +672,29 @@
                             document.getElementById('cref').value = data.dados.cref || '';
                             document.getElementById('certificacoes').value = data.dados.certificacoes || '';
 
+                            // Popula a nova seção de Remuneração (com a tabela de domínio)
+                            setTimeout(() => {
+                                const selectTipo = document.getElementById('tipo_remuneracao_id');
+                                if(data.dados.tipo_remuneracao_id) {
+                                    selectTipo.value = data.dados.tipo_remuneracao_id;
+                                    // Dispara o change para atualizar os labels de Moeda / Porcentagem
+                                    selectTipo.dispatchEvent(new Event('change'));
+                                }
+
+                                const inputValRem = document.getElementById('valor_remuneracao');
+                                if (data.dados.valor_remuneracao) {
+                                    // Pega a regra atual do select recém-ajustado
+                                    const opSelecionada = selectTipo.options[selectTipo.selectedIndex];
+                                    const regAtual = opSelecionada ? opSelecionada.getAttribute('data-regra') : null;
+                                    
+                                    const valString = (data.dados.valor_remuneracao * 100).toFixed(0); 
+                                    inputValRem.value = valString;
+                                    formatarValorDinamico(inputValRem, regAtual);
+                                } else {
+                                    inputValRem.value = '';
+                                }
+                            }, 300); // pequeno delay para garantir que o fetch das remunerações terminou
+
                             // Exibe miniaturas e links dos certificados já cadastrados (múltiplos)
                             if (data.dados.certificados && data.dados.certificados.length > 0) {
                                 let htmlDocs = "";
@@ -608,8 +740,10 @@
                             document.getElementById('sexo').value = sexoStr;
                             document.getElementById('data_inicio').value = data.dados.data_inicio || '';
                             
-                            const camposLimpar = ['nome_emergencia', 'telefone_emergencia', 'cref', 'certificacoes'];
+                            const camposLimpar = ['nome_emergencia', 'telefone_emergencia', 'cref', 'certificacoes', 'valor_remuneracao'];
                             camposLimpar.forEach(id => document.getElementById(id).value = '');
+                            
+                            document.getElementById('tipo_remuneracao_id').value = '';
                         }
                         
                         atualizarResumoModalidades();
@@ -619,7 +753,7 @@
                             if (typeof monitorarAlteracoes === 'function') {
                                 monitorarAlteracoes('formProfessor', 'btnSalvar', validarFormulario);
                             }
-                        }, 100);
+                        }, 500);
                         
                     } else {
                         spanErroCpf.textContent = data.msg || "Funcionário não encontrado.";
@@ -684,6 +818,12 @@
                 
                 const inputTelefone = document.getElementById("telefone");
                 if(inputTelefone && inputTelefone.value) inputTelefone.value = inputTelefone.value.replace(/\D/g, "");
+
+                // Trata o valor da remuneração retirando símbolos (R$ ou %) e pontuação de milhar antes de enviar ao MySQL
+                const inputValRem = document.getElementById("valor_remuneracao");
+                if (inputValRem && inputValRem.value) {
+                    inputValRem.value = inputValRem.value.replace("R$ ", "").replace(" %", "").replace(/\./g, "").replace(",", ".");
+                }
             }
         });
     });

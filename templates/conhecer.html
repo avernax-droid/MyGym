@@ -1,0 +1,374 @@
+{# 
+==============================================================================
+PROJETO: MyGym
+MÓDULO: templates/conhecer.html
+DATA DE CRIAÇÃO: 15/10/26
+TÍTULO: Página Institucional - Venha nos Conhecer (Desktop)
+FUNÇÃO: Apresentar a metodologia terapêutica e aquática especializada, focado 
+        no desenvolvimento global infantil, com canal interativo e agendamento.
+
+HISTÓRICO DE ALTERAÇÕES:
+15/10/26: Criação inicial da página pública.
+15/10/26: Substituição do link de voltar pelo botão 'X', ativação do Enter como Tab e inclusão de campos de agendamento de visita.
+============================================================================== 
+#}
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MyGym - Venha nos Conhecer</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,600;0,800;1,300;1,800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="{{ url_for('static', filename='validacoes.js') }}"></script>
+
+    <style>
+        :root {
+            --fundo-gradiente-1: #002B49; 
+            --fundo-gradiente-2: #80D5C9; 
+            --texto-principal: #2C3E50;
+            --fonte-principal: 'Poppins', sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: var(--fonte-principal);
+            background: linear-gradient(to bottom, var(--fundo-gradiente-1) 0%, var(--fundo-gradiente-2) 100%);
+            min-height: 100vh;
+            color: #FFFFFF;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Ícone de Fechar (Voltar à Capa) padrão Backoffice */
+        .btn-fechar-form {
+            position: absolute;
+            top: 1.5rem;
+            right: 2.5rem;
+            font-size: 2rem;
+            color: #FFFFFF;
+            text-decoration: none;
+            opacity: 0.7;
+            transition: opacity 0.3s ease;
+            line-height: 1;
+            z-index: 10;
+        }
+
+        .btn-fechar-form:hover {
+            opacity: 1;
+        }
+
+        .container-conteudo {
+            width: 100%;
+            max-width: 950px;
+            margin: 5rem auto 4rem auto;
+            padding: 2.5rem;
+            background-color: rgba(0, 21, 36, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            box-shadow: 0px 20px 40px rgba(0, 0, 0, 0.4);
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-top: 0;
+            color: #80D5C9;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #80D5C9;
+            margin-top: 2rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+            padding-bottom: 0.5rem;
+        }
+
+        p {
+            font-size: 1.05rem;
+            line-height: 1.7;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 1rem;
+        }
+
+        .beneficios-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .beneficio-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 1.5rem;
+            border-radius: 8px;
+        }
+
+        .beneficio-card i {
+            font-size: 2rem;
+            color: #80D5C9;
+            margin-bottom: 1rem;
+        }
+
+        .beneficio-card h3 {
+            margin: 0 0 0.5rem 0;
+            font-size: 1.2rem;
+            color: #FFFFFF;
+        }
+
+        /* Formulário de Contato */
+        .form-contato {
+            margin-top: 2rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px dashed rgba(128, 213, 201, 0.4);
+            padding: 2rem;
+            border-radius: 8px;
+        }
+
+        .form-linha {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 1.2rem;
+        }
+
+        .form-grupo {
+            flex: 1;
+            text-align: left;
+        }
+
+        .form-grupo label {
+            display: block;
+            margin-bottom: 0.4rem;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.85);
+        }
+
+        .input-limpo, .select-limpo, textarea {
+            width: 100%;
+            padding: 0.9rem 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            color: #FFFFFF;
+            font-family: var(--fonte-principal);
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+
+        /* Ajuste visual para calendário no dark mode */
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1) opacity(0.6);
+            cursor: pointer;
+        }
+
+        .input-limpo:focus, .select-limpo:focus, textarea:focus {
+            outline: none;
+            border-color: #80D5C9;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .select-limpo option {
+            background-color: #001524;
+            color: #FFFFFF;
+        }
+
+        .bloco-agendamento {
+            background: rgba(128, 213, 201, 0.05);
+            border: 1px solid rgba(128, 213, 201, 0.2);
+            padding: 1.2rem;
+            border-radius: 6px;
+            margin-top: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .btn-enviar {
+            background-color: #80D5C9;
+            color: #002B49;
+            border: none;
+            padding: 1rem 2rem;
+            border-radius: 8px;
+            font-family: var(--fonte-principal);
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            transition: all 0.3s ease;
+            margin-top: 1rem;
+        }
+
+        .btn-enviar:hover {
+            background-color: #FFFFFF;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container-conteudo">
+        <a href="/" class="btn-fechar-form" title="Voltar à Capa">&times;</a>
+
+        <h1>Natação com Propósito e Acolhimento</h1>
+        
+        <p>
+            Mais do que ensinar a nadar, nosso trabalho é focado no <strong>desenvolvimento global da criança</strong> através do meio aquático. Utilizamos a água como um ambiente terapêutico e lúdico para promover a regulação sensorial, autonomia, psicomotricidade, foco e evolução comportamental.
+        </p>
+        <p>
+            Atendimento especializado e humanizado para crianças com necessidades específicas (TEA, TDAH, atrasos no desenvolvimento e outras singularidades), respeitando o tempo e o ritmo individual de cada pequeno.
+        </p>
+
+        <div class="beneficios-grid">
+            <div class="beneficio-card">
+                <i class="fas fa-water"></i>
+                <h3>Regulação Sensorial</h3>
+                <p>A pressão hidrostática e a temperatura da água proporcionam um abraço acolhedor, auxiliando na organização neurológica e corporal.</p>
+            </div>
+            <div class="beneficio-card">
+                <i class="fas fa-puzzle-piece"></i>
+                <h3>Abordagem Individualizada</h3>
+                <p>Planos pedagógicos e lúdicos adaptados às características sensoriais e comunicativas de cada criança.</p>
+            </div>
+            <div class="beneficio-card">
+                <i class="fas fa-hands-holding-child"></i>
+                <h3>Segurança Aquática e Afeto</h3>
+                <p>Construção de vínculo seguro e confiança na água, garantindo autonomia e prevenção de afogamentos de forma divertida.</p>
+            </div>
+            <div class="beneficio-card">
+                <i class="fas fa-seedling"></i>
+                <h3>Evolução Global</h3>
+                <p>Acompanhamento detalhado do progresso motor, social e comportamental, mantendo os pais sempre informados.</p>
+            </div>
+        </div>
+
+        <h2>Venha nos Conhecer</h2>
+        <p>Preencha o formulário abaixo para tirar suas dúvidas, contar um pouco sobre sua criança e, se desejar, solicitar o agendamento de uma visita:</p>
+
+        <form id="formVisitante" class="form-contato">
+            <div class="form-linha">
+                <div class="form-grupo">
+                    <label for="nome_responsavel">Nome do Responsável *</label>
+                    <input type="text" id="nome_responsavel" name="nome_responsavel" class="input-limpo" required placeholder="Seu nome completo">
+                </div>
+                <div class="form-grupo">
+                    <label for="telefone">Telefone / WhatsApp *</label>
+                    <input type="text" id="telefone" name="telefone" class="input-limpo" required placeholder="(11) 99999-9999" maxlength="15" oninput="aplicarMascaraTelefone(this)">
+                </div>
+            </div>
+
+            <div class="form-linha">
+                <div class="form-grupo">
+                    <label for="email">E-mail *</label>
+                    <input type="email" id="email" name="email" class="input-limpo" required placeholder="seu@email.com">
+                </div>
+                <div class="form-grupo">
+                    <label for="nome_crianca">Nome da Criança</label>
+                    <input type="text" id="nome_crianca" name="nome_crianca" class="input-limpo" placeholder="Nome da criança">
+                </div>
+                <div class="form-grupo" style="flex: 0.6;">
+                    <label for="idade_crianca">Idade</label>
+                    <input type="text" id="idade_crianca" name="idade_crianca" class="input-limpo" placeholder="Ex: 5 anos">
+                </div>
+            </div>
+
+            <div class="form-linha">
+                <div class="form-grupo">
+                    <label for="perfil_necessidade">Conte um pouco sobre sua criança e sua dúvida / interesse *</label>
+                    <textarea id="perfil_necessidade" name="perfil_necessidade" class="input-limpo" rows="3" required placeholder="Ex: Meu filho tem laudo de TEA grau 1..."></textarea>
+                </div>
+            </div>
+
+            <!-- BLOCO DE AGENDAMENTO DE VISITA -->
+            <div class="bloco-agendamento">
+                <div class="form-linha" style="margin-bottom: 0.8rem;">
+                    <div class="form-grupo">
+                        <label for="deseja_agendar" style="color: #80D5C9; font-weight: 600;">Deseja agendar uma visita presencial / conversa inicial?</label>
+                        <select id="deseja_agendar" name="deseja_agendar" class="select-limpo" onchange="alternarCamposAgendamento()">
+                            <option value="nao">Não, apenas tirar dúvidas por enquanto</option>
+                            <option value="sim">Sim, gostaria de agendar uma visita</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="camposDataVisita" class="form-linha" style="display: none; margin-bottom: 0;">
+                    <div class="form-grupo">
+                        <label for="data_visita">Data Preferida para Visita</label>
+                        <input type="date" id="data_visita" name="data_visita" class="input-limpo">
+                    </div>
+                    <div class="form-grupo">
+                        <label for="periodo_visita">Período Preferido</label>
+                        <select id="periodo_visita" name="periodo_visita" class="select-limpo">
+                            <option value="Manhã">Manhã</option>
+                            <option value="Tarde">Tarde</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" id="btnEnviarContato" class="btn-enviar">Enviar Mensagem</button>
+        </form>
+    </div>
+
+    <script>
+        function alternarCamposAgendamento() {
+            const deseja = document.getElementById('deseja_agendar').value;
+            const blocoData = document.getElementById('camposDataVisita');
+            if (deseja === 'sim') {
+                blocoData.style.display = 'flex';
+            } else {
+                blocoData.style.display = 'none';
+                document.getElementById('data_visita').value = '';
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", function() {
+            // Ativa a navegação Enter como Tab centralizada no validacoes.js
+            if (typeof configurarEnterComoTab === "function") {
+                configurarEnterComoTab();
+            }
+
+            document.getElementById('formVisitante').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const btn = document.getElementById('btnEnviarContato');
+                btn.innerText = 'Enviando...';
+                btn.disabled = true;
+
+                const formData = new FormData(this);
+
+                fetch('/api/visitantes/salvar', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(res => res.json())
+                .then(data => {
+                    alert(data.msg);
+                    if (data.sucesso) {
+                        this.reset();
+                        alternarCamposAgendamento();
+                    }
+                    btn.innerText = 'Enviar Mensagem';
+                    btn.disabled = false;
+                })
+                .catch(err => {
+                    console.error(err);
+                    alert("Erro ao enviar mensagem. Tente novamente.");
+                    btn.innerText = 'Enviar Mensagem';
+                    btn.disabled = false;
+                });
+            });
+        });
+    </script>
+</body>
+</html>

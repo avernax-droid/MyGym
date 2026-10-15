@@ -23,6 +23,7 @@
  21/08/26: Integração da Ponte Inteligente (Leitura de aluno_id da URL e dados de carrinho do sessionStorage).
  21/08/26: Inclusão do painel interativo de Forma de Pagamento (Cartão, PIX, Boleto) e parcelamento dinâmico.
  21/08/26: Refatoração da Forma de Pagamento para exibição em Modal (Popup) em vez de painel inline para manter a tela limpa.
+ 22/08/26: Implementação de envio assíncrono (AJAX) no formMatricula para processar o retorno JSON do backend e manter o estado visual da tela.
 ============================================================================== #}
 
 {% extends "base.html" %}
@@ -1189,16 +1190,61 @@
             }
         });
 
+        // === INTERCEPTAÇÃO DO ENVIO (AJAX) ===
         form.addEventListener("submit", function(e) {
+            e.preventDefault(); 
+
             if (btnSalvar.disabled) {
-                e.preventDefault();
-            } else {
-                const tx = document.getElementById("taxa_matricula");
-                if(tx.value) {
-                    let valor = tx.value.replace("R$ ", "").replace(/\./g, "").replace(",", ".");
-                    tx.value = valor;
-                }
+                return;
+            } 
+            
+            // Tratamento da moeda antes de enviar
+            const tx = document.getElementById("taxa_matricula");
+            if(tx.value) {
+                let valor = tx.value.replace("R$ ", "").replace(/\./g, "").replace(",", ".");
+                tx.value = valor;
             }
+
+            const textoOriginal = btnSalvar.innerText;
+            btnSalvar.innerText = 'Salvando...';
+            btnSalvar.disabled = true;
+
+            const formData = new FormData(this);
+
+            fetch(this.action, {
+                method: this.method,
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.sucesso) {
+                    alert(data.msg || "Matrícula salva com sucesso!");
+                    
+                    // Limpa o formulário e volta ao estado inicial para a próxima operação
+                    form.reset();
+                    document.getElementById('foto_aluno').style.display = 'none';
+                    document.getElementById('foto_placeholder').style.display = 'block';
+                    document.getElementById('containerGrade').innerHTML = '';
+                    document.getElementById('box_parcelas').style.display = 'none';
+                    document.getElementById('area_dados_matricula').disabled = true;
+                    document.getElementById('busca_aluno').style.color = "#FFFFFF";
+                    document.getElementById('aluno_id').value = "";
+                    document.getElementById('matricula_id').value = "";
+                    
+                    btnSalvar.innerText = textoOriginal;
+                    btnSalvar.disabled = true; 
+                } else {
+                    alert(data.msg || "Erro ao salvar a matrícula.");
+                    btnSalvar.innerText = textoOriginal;
+                    btnSalvar.disabled = false;
+                }
+            })
+            .catch(error => {
+                console.error("Erro no envio:", error);
+                alert("Erro de conexão ao tentar salvar a matrícula no servidor.");
+                btnSalvar.innerText = textoOriginal;
+                btnSalvar.disabled = false;
+            });
         });
     });
 </script>

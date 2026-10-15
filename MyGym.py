@@ -53,6 +53,9 @@
 # 19/08/26: Inclusão das rotas de gestão da Tabela de Preços (nova, buscar e salvar).
 # 21/08/26: Alteração na rota salvar_aluno para retornar JSON (Ponte Inteligente com Quadro de Vagas).
 # 21/08/26: Inclusão dos campos forma_pagamento e parcelas na API de busca de aluno e na persistência de matrículas.
+# 22/08/26: Refatoração na rota /backoffice/matriculas/salvar para incluir validação de capacidade de turmas e retorno assíncrono (JSON).
+# 22/08/26: Refatoração do cadastro de professores para utilizar a tabela de domínio tipos_remuneracao.
+# 22/08/26: Criação das rotas de listagem e salvamento para o CRUD de tipos de remuneração.
 # ==============================================================================
 
 import os
@@ -584,13 +587,105 @@ def salvar_funcionario():
     return redirect(url_for('novo_funcionario'))
 
 # ==============================================================================
-# ROTAS DO CADASTRO DE PROFESSORES
+# ROTAS DO CADASTRO DE PROFESSORES E REMUNERAÇÃO
 # ==============================================================================
 
 @app.route('/backoffice/professores/novo')
 @requer_permissao('mod_cad_prof')
 def novo_professor():
     return render_template('backoffice/cadastro_professor.html')
+
+@app.route('/backoffice/remuneracoes', methods=['GET'])
+@requer_permissao('mod_cad_prof')
+def listar_remuneracoes():
+    conn = get_connection()
+    remuneracoes = []
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, descricao, regra_calculo, status FROM tipos_remuneracao ORDER BY id DESC")
+            rows = cursor.fetchall()
+            for r in rows:
+                remuneracoes.append({
+                    'id': r[0],
+                    'descricao': r[1],
+                    'regra_calculo': r[2],
+                    'status': r[3]
+                })
+        except Exception as e:
+            print(f"Erro ao buscar tipos de remuneração: {e}")
+        finally:
+            cursor.close()
+            conn.close()
+    return render_template('backoffice/tipos_remuneracao.html', remuneracoes=remuneracoes)
+
+@app.route('/backoffice/remuneracoes/salvar', methods=['POST'])
+@requer_permissao('mod_cad_prof')
+def salvar_remuneracao():
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            
+            # 1. Trata a INSERÇÃO de um novo modelo (se preenchido)
+            novo_descricao = request.form.get('novo_descricao')
+            novo_regra = request.form.get('novo_regra')
+            
+            if novo_descricao and novo_regra:
+                sql_insert = "INSERT INTO tipos_remuneracao (descricao, regra_calculo, status) VALUES (%s, %s, 'ativo')"
+                cursor.execute(sql_insert, (novo_descricao.strip(), novo_regra.strip()))
+
+            # 2. Trata a EDIÇÃO EM LOTE dos modelos existentes
+            ids = request.form.getlist('id[]')
+            descricoes = request.form.getlist('descricao[]')
+            regras = request.form.getlist('regra_calculo[]')
+            status_list = request.form.getlist('status[]')
+            
+            if ids:
+                for i in range(len(ids)):
+                    rem_id = ids[i]
+                    # Garante que as listas tenham tamanho compatível
+                    if i < len(descricoes) and i < len(regras) and i < len(status_list):
+                        desc = descricoes[i].strip()
+                        regra = regras[i].strip()
+                        status = status_list[i].strip()
+                        
+                        sql_update = """
+                            UPDATE tipos_remuneracao 
+                            SET descricao=%s, regra_calculo=%s, status=%s 
+                            WHERE id=%s
+                        """
+                        cursor.execute(sql_update, (desc, regra, status, rem_id))
+            
+            conn.commit()
+            print("Tipos de Remuneração salvos/atualizados com sucesso!")
+        except Exception as e:
+            print(f"Erro ao salvar tipos de remuneração: {e}")
+            conn.rollback()
+        finally:
+            cursor.close()
+            conn.close()
+                
+    return redirect(url_for('listar_remuneracoes'))
+
+@app.route('/api/remuneracoes/ativas', methods=['GET'])
+def buscar_remuneracoes_ativas():
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            cursor.execute("SELECT id, descricao, regra_calculo FROM tipos_remuneracao WHERE status = 'ativo'")
+            rows = cursor.fetchall()
+            
+            lista = [{'id': r[0], 'descricao': r[1], 'regra_calculo': r[2]} for r in rows]
+            return jsonify({'sucesso': True, 'remuneracoes': lista})
+        except Exception as e:
+            print(f"Erro ao buscar tipos de remuneração no banco: {e}")
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return jsonify({'sucesso': False})
 
 @app.route('/api/valida_professor_funcionario', methods=['GET'])
 def valida_professor_funcionario():
@@ -621,7 +716,8 @@ def valida_professor_funcionario():
             func_id = func[0]
             
             sql_prof = """
-                SELECT id, nome_emergencia, telefone_emergencia, cref, modalidades, certificacoes
+                SELECT id, nome_emergencia, telefone_emergencia, cref, modalidades, certificacoes,
+                       tipo_remuneracao_id, valor_remuneracao
                 FROM professores WHERE funcionario_id = %s LIMIT 1
             """
             cursor.execute(sql_prof, (func_id,))
@@ -655,6 +751,8 @@ def valida_professor_funcionario():
                         'cref': prof[3],
                         'modalidades': prof[4],
                         'certificacoes': prof[5],
+                        'tipo_remuneracao_id': prof[6],
+                        'valor_remuneracao': str(prof[7]) if prof[7] is not None else '',
                         'certificados': certificados_lista
                     }
                 })
@@ -695,6 +793,20 @@ def salvar_professor():
     modalidades = request.form.get('modalidades')
     certificacoes = request.form.get('certificacoes')
     
+    tipo_remuneracao_id = request.form.get('tipo_remuneracao_id')
+    valor_remuneracao = request.form.get('valor_remuneracao')
+    
+    if valor_remuneracao:
+        valor_limpo = valor_remuneracao.replace('R$', '').replace('%', '').strip()
+        if ',' in valor_limpo:
+            valor_limpo = valor_limpo.replace('.', '').replace(',', '.')
+        try:
+            valor_remuneracao = float(valor_limpo)
+        except ValueError:
+            valor_remuneracao = 0.00
+    else:
+        valor_remuneracao = 0.00
+    
     conn = get_connection()
     if conn:
         try:
@@ -712,19 +824,19 @@ def salvar_professor():
                 sql = """
                     UPDATE professores 
                     SET nome_emergencia=%s, telefone_emergencia=%s, cref=%s, 
-                        modalidades=%s, certificacoes=%s
+                        modalidades=%s, certificacoes=%s, tipo_remuneracao_id=%s, valor_remuneracao=%s
                     WHERE id=%s
                 """
-                valores = (nome_emergencia, telefone_emergencia, cref, modalidades, certificacoes, professor_id)
+                valores = (nome_emergencia, telefone_emergencia, cref, modalidades, certificacoes, tipo_remuneracao_id, valor_remuneracao, professor_id)
                 cursor.execute(sql, valores)
             else: 
                 sql = """
                     INSERT INTO professores (funcionario_id, usuario_id, nome_emergencia, telefone_emergencia, 
-                                            cref, modalidades, certificacoes)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                                            cref, modalidades, certificacoes, tipo_remuneracao_id, valor_remuneracao)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
                 valores = (funcionario_id, usuario_id, nome_emergencia, telefone_emergencia, 
-                           cref, modalidades, certificacoes)
+                           cref, modalidades, certificacoes, tipo_remuneracao_id, valor_remuneracao)
                 cursor.execute(sql, valores)
                 professor_id = cursor.lastrowid
             
@@ -1577,7 +1689,38 @@ def salvar_matricula():
                     partes = horario.split(':')
                     if len(partes) >= 2:
                         horario = f"{int(partes[0]):02d}:{partes[1]}"
+                    
+                    # --- TRAVA DE CAPACIDADE MÁXIMA ---
+                    # Busca a capacidade da turma alvo
+                    cursor.execute("""
+                        SELECT capacidade_maxima FROM turmas 
+                        WHERE modalidade = %s AND dias_semana LIKE %s AND horario LIKE %s AND status = 'Ativa' 
+                        LIMIT 1
+                    """, (mod, f"%{dia}%", f"{horario}%"))
+                    
+                    turma_info = cursor.fetchone()
+                    if turma_info:
+                        capacidade = turma_info[0]
                         
+                        # Conta quantos alunos ativos ocupam essa vaga, excluindo a própria matrícula (em caso de update)
+                        cursor.execute("""
+                            SELECT COUNT(mg.id) 
+                            FROM matricula_grade mg 
+                            JOIN matriculas m ON mg.matricula_id = m.id 
+                            WHERE mg.modalidade = %s AND mg.dias_semana = %s AND mg.horario = %s AND m.status = 'Ativa' AND mg.matricula_id != %s
+                        """, (mod, dia, horario, matricula_id))
+                        
+                        ocupados = cursor.fetchone()[0]
+                        
+                        if ocupados >= capacidade:
+                            conn.rollback() # Cancela a transação inteira, incluindo a persistência do cabeçalho da matrícula
+                            is_ajax = request.headers.get('Accept') == 'application/json' or 'fetch' in str(request.headers.get('User-Agent', '')).lower()
+                            msg_erro = f"Matrícula bloqueada: A turma de {mod} para {dia} às {horario} já atingiu a capacidade máxima."
+                            if is_ajax:
+                                return jsonify({'sucesso': False, 'msg': msg_erro})
+                            return redirect(url_for('nova_matricula', erro=msg_erro))
+                    # --- FIM DA TRAVA DE CAPACIDADE ---
+
                     sql_grade = """
                         INSERT INTO matricula_grade (matricula_id, modalidade, dias_semana, horario)
                         VALUES (%s, %s, %s, %s)
@@ -1628,11 +1771,99 @@ def salvar_matricula():
         except Exception as e:
             print(f"Erro ao salvar matrícula no banco: {e}")
             conn.rollback()
+            is_ajax = request.headers.get('Accept') == 'application/json' or 'fetch' in str(request.headers.get('User-Agent', '')).lower()
+            if is_ajax:
+                return jsonify({'sucesso': False, 'msg': f'Erro ao salvar matrícula no banco de dados.'})
         finally:
             cursor.close()
             conn.close()
             
+    # Retorno assíncrono para o Front-end não perder o estado visual (Dirty Form / Modais)
+    is_ajax = request.headers.get('Accept') == 'application/json' or 'fetch' in str(request.headers.get('User-Agent', '')).lower() or request.headers.get('Sec-Fetch-Mode') == 'cors'
+    if is_ajax:
+        return jsonify({'sucesso': True, 'msg': 'Matrícula efetuada com sucesso!', 'matricula_id': matricula_id})
+        
     return redirect(url_for('nova_matricula'))
+
+# ==============================================================================
+# ROTAS DA ÁREA PÚBLICA: "VENHA NOS CONHECER" E VISITANTES
+# ==============================================================================
+
+@app.route('/conhecer', methods=['GET'])
+def pagina_conhecer():
+    mobile = is_mobile(request)
+    if mobile:
+        return render_template('mobile/conhecer.html')
+    else:
+        return render_template('conhecer.html')
+    
+@app.route('/api/visitantes/salvar', methods=['POST'])
+def salvar_visitante():
+    import uuid
+    nome_responsavel = request.form.get('nome_responsavel')
+    telefone = request.form.get('telefone')
+    if telefone:
+        telefone = re.sub(r'\D', '', telefone)
+    email = request.form.get('email')
+    nome_crianca = request.form.get('nome_crianca')
+    idade_crianca = request.form.get('idade_crianca')
+    perfil_necessidade = request.form.get('perfil_necessidade')
+    
+    deseja_agendar = request.form.get('deseja_agendar') # 'sim' ou 'nao'
+    data_visita = request.form.get('data_visita')
+    periodo_visita = request.form.get('periodo_visita') # Ex: 'Manhã' ou 'Tarde'
+    
+    token_acesso = str(uuid.uuid4())
+    
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            sql = """
+                INSERT INTO visitantes (nome_responsavel, telefone, email, nome_crianca, idade_crianca, perfil_necessidade, token_acesso, status)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, 'novo')
+            """
+            cursor.execute(sql, (nome_responsavel, telefone, email, nome_crianca, idade_crianca, perfil_necessidade, token_acesso))
+            visitante_id = cursor.lastrowid
+            
+            # Insere a mensagem inicial na comunicação
+            if perfil_necessidade:
+                sql_msg = """
+                    INSERT INTO comunicacao_mensagens (visitante_id, remetente_tipo, mensagem)
+                    VALUES (%s, 'visitante', %s)
+                """
+                cursor.execute(sql_msg, (visitante_id, perfil_necessidade))
+                
+            # Se o visitante marcou que deseja agendar visita
+            if deseja_agendar == 'sim' and data_visita:
+                # Converte o período em horário padrão para a tabela (ex: 09:00:00 ou 14:00:00)
+                horario_sql = "14:00:00" if periodo_visita == "Tarde" else "09:00:00"
+                sql_agend = """
+                    INSERT INTO agendamentos (visitante_id, tipo, data_agendamento, horario, status, observacoes)
+                    VALUES (%s, 'Visita / Conversa Inicial', %s, %s, 'solicitado', %s)
+                """
+                obs_agend = f"Período preferido: {periodo_visita}"
+                cursor.execute(sql_agend, (visitante_id, data_visita, horario_sql, obs_agend))
+                
+            conn.commit()
+            
+            msg_retorno = 'Mensagem enviada com sucesso!'
+            if deseja_agendar == 'sim':
+                msg_retorno = 'Mensagem e solicitação de agendamento enviadas com sucesso! Entraremos em contato.'
+                
+            return jsonify({
+                'sucesso': True,
+                'msg': msg_retorno
+            })
+        except Exception as e:
+            print(f"Erro ao salvar visitante e agendamento: {e}")
+            conn.rollback()
+            return jsonify({'sucesso': False, 'msg': 'Erro interno ao tentar processar sua solicitação.'})
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return jsonify({'sucesso': False, 'msg': 'Erro de conexão com o banco de dados.'})
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
