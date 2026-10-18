@@ -56,6 +56,12 @@
 # 22/08/26: Refatoração na rota /backoffice/matriculas/salvar para incluir validação de capacidade de turmas e retorno assíncrono (JSON).
 # 22/08/26: Refatoração do cadastro de professores para utilizar a tabela de domínio tipos_remuneracao.
 # 22/08/26: Criação das rotas de listagem e salvamento para o CRUD de tipos de remuneração.
+# 15/10/26: Criação das rotas públicas (/conhecer, /api/visitantes/salvar) e da Central de Atendimento (/backoffice/atendimento).
+# 17/10/26: Inclusão do campo sexo na persistência e listagem da tabela visitantes.
+# 18/10/26: Criação da rota /api/visitantes/buscar_por_telefone para autopreenchimento de visitantes cadastrados e tratamento de UPDATE em /api/visitantes/salvar.
+# 18/10/26: Ajuste na contagem de mensagens pendentes (status='novo'), atualização para 'em_atendimento' ao responder e retorno de total_nao_lidas.
+# 18/10/26: Filtragem de visitantes na Central de Atendimento para exibir apenas status 'novo' ou 'em_atendimento'.
+# 18/10/26: Atualização do fluxo de atendimento para utilizar o status 'respondido' e ocultar da listagem principal após a resposta.
 # ==============================================================================
 
 import os
@@ -90,8 +96,8 @@ def injetar_contador_atendimento():
     if conn:
         try:
             cursor = conn.cursor()
-            # Conta quantos visitantes estão cadastrados aguardando interação ou análise
-            cursor.execute("SELECT COUNT(*) FROM visitantes")
+            # Conta apenas os visitantes com status 'novo' (aguardando resposta da escola)
+            cursor.execute("SELECT COUNT(*) FROM visitantes WHERE status = 'novo'")
             row = cursor.fetchone()
             if row:
                 total_nao_lidas = row[0]
@@ -1815,6 +1821,49 @@ def pagina_conhecer():
         return render_template('mobile/conhecer.html')
     else:
         return render_template('conhecer.html')
+
+@app.route('/api/visitantes/buscar_por_telefone', methods=['GET'])
+def buscar_visitante_por_telefone():
+    telefone = request.args.get('telefone', '')
+    tel_limpo = re.sub(r'\D', '', telefone)
+    
+    if not tel_limpo:
+        return jsonify({'encontrado': False})
+        
+    conn = get_connection()
+    if conn:
+        try:
+            cursor = conn.cursor()
+            sql = """
+                SELECT id, nome_responsavel, email, nome_crianca, idade_crianca, sexo, perfil_necessidade
+                FROM visitantes
+                WHERE telefone = %s
+                ORDER BY id DESC
+                LIMIT 1
+            """
+            cursor.execute(sql, (tel_limpo,))
+            row = cursor.fetchone()
+            
+            if row:
+                return jsonify({
+                    'encontrado': True,
+                    'dados': {
+                        'id': row[0],
+                        'nome_responsavel': row[1] or '',
+                        'email': row[2] or '',
+                        'nome_crianca': row[3] or '',
+                        'idade_crianca': row[4] or '',
+                        'sexo': row[5] or '',
+                        'perfil_necessidade': row[6] or ''
+                    }
+                })
+        except Exception as e:
+            print(f"Erro ao buscar visitante por telefone via API: {e}")
+        finally:
+            cursor.close()
+            conn.close()
+            
+    return jsonify({'encontrado': False})
     
 @app.route('/api/visitantes/salvar', methods=['POST'])
 def salvar_visitante():
@@ -1826,26 +1875,40 @@ def salvar_visitante():
     email = request.form.get('email')
     nome_crianca = request.form.get('nome_crianca')
     idade_crianca = request.form.get('idade_crianca')
+    sexo = request.form.get('sexo')
     perfil_necessidade = request.form.get('perfil_necessidade')
     
     deseja_agendar = request.form.get('deseja_agendar') # 'sim' ou 'nao'
     data_visita = request.form.get('data_visita')
     periodo_visita = request.form.get('periodo_visita') # Ex: 'Manhã' ou 'Tarde'
     
-    token_acesso = str(uuid.uuid4())
-    
     conn = get_connection()
     if conn:
         try:
             cursor = conn.cursor()
-            sql = """
-                INSERT INTO visitantes (nome_responsavel, telefone, email, nome_crianca, idade_crianca, perfil_necessidade, token_acesso, status)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 'novo')
-            """
-            cursor.execute(sql, (nome_responsavel, telefone, email, nome_crianca, idade_crianca, perfil_necessidade, token_acesso))
-            visitante_id = cursor.lastrowid
             
-            # Insere a mensagem inicial na comunicação
+            # Verifica se já existe registro com este telefone para atualizar em vez de duplicar
+            cursor.execute("SELECT id FROM visitantes WHERE telefone = %s ORDER BY id DESC LIMIT 1", (telefone,))
+            existente = cursor.fetchone()
+            
+            if existente:
+                visitante_id = existente[0]
+                sql_update = """
+                    UPDATE visitantes
+                    SET nome_responsavel=%s, email=%s, nome_crianca=%s, idade_crianca=%s, sexo=%s, perfil_necessidade=%s, status='novo'
+                    WHERE id=%s
+                """
+                cursor.execute(sql_update, (nome_responsavel, email, nome_crianca, idade_crianca, sexo, perfil_necessidade, visitante_id))
+            else:
+                token_acesso = str(uuid.uuid4())
+                sql_insert = """
+                    INSERT INTO visitantes (nome_responsavel, telefone, email, nome_crianca, idade_crianca, sexo, perfil_necessidade, token_acesso, status)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'novo')
+                """
+                cursor.execute(sql_insert, (nome_responsavel, telefone, email, nome_crianca, idade_crianca, sexo, perfil_necessidade, token_acesso))
+                visitante_id = cursor.lastrowid
+            
+            # Insere a mensagem na comunicação
             if perfil_necessidade:
                 sql_msg = """
                     INSERT INTO comunicacao_mensagens (visitante_id, remetente_tipo, mensagem)
@@ -1896,7 +1959,8 @@ def central_atendimento():
     if conn:
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, nome_responsavel, telefone, email, nome_crianca, perfil_necessidade, created_at FROM visitantes ORDER BY id DESC")
+            # Traz apenas os visitantes que estão aguardando nova interação (status 'novo')
+            cursor.execute("SELECT id, nome_responsavel, telefone, email, nome_crianca, sexo, perfil_necessidade, created_at FROM visitantes WHERE status = 'novo' ORDER BY id DESC")
             rows = cursor.fetchall()
             for r in rows:
                 visitantes.append({
@@ -1905,8 +1969,9 @@ def central_atendimento():
                     'telefone': r[2],
                     'email': r[3],
                     'nome_crianca': r[4],
-                    'perfil_necessidade': r[5],
-                    'created_at': str(r[6])
+                    'sexo': r[5],
+                    'perfil_necessidade': r[6],
+                    'created_at': str(r[7])
                 })
         except Exception as e:
             print(f"Erro ao buscar visitantes para atendimento: {e}")
@@ -1968,6 +2033,10 @@ def api_enviar_mensagem():
                 sql = "INSERT INTO comunicacao_mensagens (visitante_id, remetente_tipo, usuario_id, mensagem) VALUES (%s, 'escola', %s, %s)"
                 cursor.execute(sql, (reg_id, usuario_id, mensagem))
                 
+                # Atualiza o status do visitante para 'respondido' e marca mensagens anteriores como lidas
+                cursor.execute("UPDATE visitantes SET status = 'respondido' WHERE id = %s AND status = 'novo'", (reg_id,))
+                cursor.execute("UPDATE comunicacao_mensagens SET lida = 1 WHERE visitante_id = %s AND remetente_tipo = 'visitante'", (reg_id,))
+                
                 # Opcional: Buscar e-mail do visitante para enviar notificação
                 cursor.execute("SELECT email, nome_responsavel, token_acesso FROM visitantes WHERE id = %s", (reg_id,))
                 v = cursor.fetchone()
@@ -1981,9 +2050,16 @@ def api_enviar_mensagem():
             else:
                 sql = "INSERT INTO comunicacao_mensagens (aluno_id, remetente_tipo, usuario_id, mensagem) VALUES (%s, 'escola', %s, %s)"
                 cursor.execute(sql, (reg_id, usuario_id, mensagem))
+                cursor.execute("UPDATE comunicacao_mensagens SET lida = 1 WHERE aluno_id = %s AND remetente_tipo = 'aluno'", (reg_id,))
                 
             conn.commit()
-            return jsonify({'sucesso': True})
+            
+            # Recalcula o total de visitantes aguardando resposta para atualizar o badge na tela
+            cursor.execute("SELECT COUNT(*) FROM visitantes WHERE status = 'novo'")
+            row_count = cursor.fetchone()
+            novo_total = row_count[0] if row_count else 0
+            
+            return jsonify({'sucesso': True, 'total_nao_lidas': novo_total})
         except Exception as e:
             print(f"Erro ao enviar resposta no atendimento: {e}")
             conn.rollback()

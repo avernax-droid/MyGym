@@ -24,6 +24,7 @@ HISTÓRICO DE ALTERAÇÕES:
 19/08/26: Inclusão do link para Tabela de Preços e verificação da permissão mod_precos no menu Backoffice.
 22/08/26: Criação do efeito sanfona (submenu) integrado ao menu Backoffice para aninhar Tipos de Remuneração.
 15/10/26: Inclusão do link Central de Atendimento no menu Backoffice com validação da permissão mod_atendimento.
+18/10/26: Adição do id 'badgeAtendimento' ao contador de mensagens não lidas para atualização dinâmica via JS.
 ============================================================================== 
 #}
 
@@ -364,7 +365,7 @@ HISTÓRICO DE ALTERAÇÕES:
                     <a href="/backoffice/atendimento" style="display: flex; justify-content: space-between; align-items: center; white-space: nowrap;">
                         <span>Central de Atendimento</span>
                         {% if total_nao_lidas and total_nao_lidas > 0 %}
-                        <span style="background-color: #ffffff; color: #002B49; padding: 0.1rem 0.4rem; border-radius: 10px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">
+                        <span id="badgeAtendimento" style="background-color: #ffffff; color: #002B49; padding: 0.1rem 0.4rem; border-radius: 10px; font-size: 0.75rem; font-weight: 600; margin-left: 8px;">
                             {{ total_nao_lidas }}
                         </span>
                         {% endif %}

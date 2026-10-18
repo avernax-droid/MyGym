@@ -9,6 +9,8 @@
  HISTÓRICO DE ALTERAÇÕES:
  15/10/26: Criação inicial da interface de atendimento em duas colunas (lista e chat).
  15/10/26: Inclusão da exibição do e-mail do visitante e máscara de telefone.
+ 17/10/26: Atualização da exibição do aluno(a) e inclusão do campo sexo nos cards da lista.
+ 18/10/26: Atualização dinâmica do contador de mensagens não lidas (badgeAtendimento) ao enviar resposta.
 ============================================================================== #}
 
 {% extends "base.html" %}
@@ -220,7 +222,7 @@
                 {% for v in visitantes %}
                 <div class="item-conversa" onclick="carregarConversa('visitante', {{ v.id }}, '{{ v.nome_responsavel }}', '{{ v.telefone }}', '{{ v.email }}')">
                     <strong style="color: #80D5C9; display: block;">{{ v.nome_responsavel }}</strong>
-                    <span style="font-size: 0.8rem; color: rgba(255,255,255,0.7); display: block;">Criança: {{ v.nome_crianca or 'Não informado' }}</span>
+                    <span style="font-size: 0.8rem; color: rgba(255,255,255,0.7); display: block;">Aluno(a): {{ v.nome_crianca or 'Não informado' }} {% if v.setup %}({{ v.sexo }}){% elif v.sexo %}({{ v.sexo }}){% endif %}</span>
                     <span style="font-size: 0.75rem; color: rgba(255,255,255,0.6); display: block;">E-mail: {{ v.email or 'Não informado' }}</span>
                     <div style="font-size: 0.75rem; color: rgba(255,255,255,0.5); margin-top: 2px;">Tel: <span class="tel-formatado">{{ v.telefone }}</span></div>
                 </div>
@@ -352,6 +354,19 @@
                 container.scrollTop = container.scrollHeight;
                 input.value = '';
                 
+                // Atualiza o contador de mensagens pendentes no menu superior
+                if (typeof data.total_nao_lidas !== 'undefined') {
+                    const badge = document.getElementById('badgeAtendimento');
+                    if (badge) {
+                        if (data.total_nao_lidas > 0) {
+                            badge.innerText = data.total_nao_lidas;
+                            badge.style.display = 'inline-block';
+                        } else {
+                            badge.style.display = 'none';
+                        }
+                    }
+                }
+
                 statusDiv.style.color = '#80D5C9';
                 statusDiv.innerText = '✓ Mensagem enviada com sucesso!';
             } else {

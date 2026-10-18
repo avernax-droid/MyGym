@@ -10,6 +10,8 @@ FUNÇÃO: Versão responsiva e otimizada para toque da página de apresentação
 HISTÓRICO DE ALTERAÇÕES:
 15/10/26: Criação da versão mobile.
 15/10/26: Substituição do link de voltar pelo botão 'X', ativação do Enter como Tab e inclusão de campos de agendamento.
+17/10/26: Alteração do rótulo "Nome da Criança" para "Nome do Aluno" e inclusão do campo "Sexo" com lista vertical de seleção (radio).
+17/10/26: Reorganização dos campos e inclusão de busca automática de cadastro pré-existente via Telefone e validação de campos obrigatórios.
 ============================================================================== 
 #}
 
@@ -153,7 +155,7 @@ HISTÓRICO DE ALTERAÇÕES:
             border-radius: 6px;
             color: #FFFFFF;
             font-family: var(--fonte-principal);
-            font-size: 16px; /* Evita auto-zoom no iOS/Android */
+            font-size: 16px;
             box-sizing: border-box;
         }
 
@@ -165,6 +167,34 @@ HISTÓRICO DE ALTERAÇÕES:
         .select-limpo option {
             background-color: #001524;
             color: #FFFFFF;
+        }
+
+        .lista-radio-vertical {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            padding: 0.75rem 1rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background-color: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+
+        .lista-radio-vertical label.radio-opcao {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            margin-bottom: 0;
+            font-size: 0.95rem;
+            color: #FFFFFF;
+            cursor: pointer;
+        }
+
+        .lista-radio-vertical input[type="radio"] {
+            accent-color: #80D5C9;
+            transform: scale(1.15);
+            cursor: pointer;
+            margin: 0;
         }
 
         .bloco-agendamento {
@@ -236,32 +266,48 @@ HISTÓRICO DE ALTERAÇÕES:
         <form id="formVisitante" class="form-contato">
             <div class="form-grupo">
                 <label for="nome_responsavel">Nome do Responsável *</label>
-                <input type="text" id="nome_responsavel" name="nome_responsavel" class="input-limpo" required placeholder="Seu nome completo">
+                <input type="text" id="nome_responsavel" name="nome_responsavel" class="input-limpo" placeholder="Seu nome completo">
             </div>
 
             <div class="form-grupo">
                 <label for="telefone">Telefone / WhatsApp *</label>
-                <input type="text" id="telefone" name="telefone" class="input-limpo" required placeholder="(11) 99999-9999" maxlength="15" oninput="aplicarMascaraTelefone(this)">
+                <input type="text" id="telefone" name="telefone" class="input-limpo" placeholder="(11) 99999-9999" maxlength="15" oninput="aplicarMascaraTelefone(this)">
             </div>
 
+            <!-- E-mail com largura total (igual ao Nome do Aluno) -->
             <div class="form-grupo">
                 <label for="email">E-mail *</label>
-                <input type="email" id="email" name="email" class="input-limpo" required placeholder="seu@email.com">
+                <input type="email" id="email" name="email" class="input-limpo" placeholder="seu@email.com">
             </div>
 
             <div class="form-grupo">
-                <label for="nome_crianca">Nome da Criança</label>
-                <input type="text" id="nome_crianca" name="nome_crianca" class="input-limpo" placeholder="Nome da criança">
+                <label for="nome_crianca">Nome do Aluno *</label>
+                <input type="text" id="nome_crianca" name="nome_crianca" class="input-limpo" placeholder="Nome do aluno">
             </div>
 
             <div class="form-grupo">
-                <label for="idade_crianca">Idade</label>
+                <label for="idade_crianca">Idade *</label>
                 <input type="text" id="idade_crianca" name="idade_crianca" class="input-limpo" placeholder="Ex: 5 anos">
             </div>
 
             <div class="form-grupo">
+                <label>Sexo *</label>
+                <div class="lista-radio-vertical">
+                    <label class="radio-opcao">
+                        <input type="radio" name="sexo" value="M"> Masculino
+                    </label>
+                    <label class="radio-opcao">
+                        <input type="radio" name="sexo" value="F"> Feminino
+                    </label>
+                    <label class="radio-opcao">
+                        <input type="radio" name="sexo" value="Outro"> Outros
+                    </label>
+                </div>
+            </div>
+
+            <div class="form-grupo">
                 <label for="perfil_necessidade">Conte sobre sua criança e seu interesse *</label>
-                <textarea id="perfil_necessidade" name="perfil_necessidade" class="input-limpo" rows="3" required placeholder="Ex: Meu filho tem laudo de TEA..."></textarea>
+                <textarea id="perfil_necessidade" name="perfil_necessidade" class="input-limpo" rows="3" placeholder="Ex: Meu filho tem laudo de TEA..."></textarea>
             </div>
 
             <!-- BLOCO DE AGENDAMENTO DE VISITA -->
@@ -310,8 +356,83 @@ HISTÓRICO DE ALTERAÇÕES:
                 configurarEnterComoTab();
             }
 
+            // Busca automática de contato existente pelo número de telefone ao sair do campo
+            document.getElementById('telefone').addEventListener('blur', function() {
+                const telVal = this.value.trim();
+                const telLimpo = telVal.replace(/\D/g, '');
+                if (telLimpo.length >= 8) {
+                    fetch(`/api/visitantes/buscar_por_telefone?telefone=${encodeURIComponent(telLimpo)}`)
+                        .then(res => res.json())
+                        .then(data => {
+                            if (data.encontrado && data.dados) {
+                                document.getElementById('nome_responsavel').value = data.dados.nome_responsavel || '';
+                                document.getElementById('email').value = data.dados.email || '';
+                                document.getElementById('nome_crianca').value = data.dados.nome_crianca || '';
+                                document.getElementById('idade_crianca').value = data.dados.idade_crianca || '';
+                                if (data.dados.sexo) {
+                                    const radioSexo = document.querySelector(`input[name="sexo"][value="${data.dados.sexo}"]`);
+                                    if (radioSexo) radioSexo.checked = true;
+                                }
+                                document.getElementById('perfil_necessidade').value = data.dados.perfil_necessidade || '';
+                            }
+                        })
+                        .catch(err => console.error("Erro ao buscar histórico do visitante:", err));
+                }
+            });
+
             document.getElementById('formVisitante').addEventListener('submit', function(e) {
                 e.preventDefault();
+
+                const nomeResp = document.getElementById('nome_responsavel').value.trim();
+                const telefone = document.getElementById('telefone').value.trim();
+                const email = document.getElementById('email').value.trim();
+                const nomeAluno = document.getElementById('nome_crianca').value.trim();
+                const idade = document.getElementById('idade_crianca').value.trim();
+                const sexoSelecionado = document.querySelector('input[name="sexo"]:checked');
+                const perfil = document.getElementById('perfil_necessidade').value.trim();
+                const desejaAgendar = document.getElementById('deseja_agendar').value;
+                const dataVisita = document.getElementById('data_visita').value.trim();
+
+                if (!nomeResp) {
+                    alert("Por favor, preencha o campo: Nome do Responsável.");
+                    document.getElementById('nome_responsavel').focus();
+                    return;
+                }
+                if (!telefone) {
+                    alert("Por favor, preencha o campo: Telefone / WhatsApp.");
+                    document.getElementById('telefone').focus();
+                    return;
+                }
+                if (!email) {
+                    alert("Por favor, preencha o campo: E-mail.");
+                    document.getElementById('email').focus();
+                    return;
+                }
+                if (!nomeAluno) {
+                    alert("Por favor, preencha o campo: Nome do Aluno.");
+                    document.getElementById('nome_crianca').focus();
+                    return;
+                }
+                if (!idade) {
+                    alert("Por favor, preencha o campo: Idade.");
+                    document.getElementById('idade_crianca').focus();
+                    return;
+                }
+                if (!sexoSelecionado) {
+                    alert("Por favor, selecione o campo: Sexo.");
+                    return;
+                }
+                if (!perfil) {
+                    alert("Por favor, preencha o campo: Conte sobre sua criança e seu interesse.");
+                    document.getElementById('perfil_necessidade').focus();
+                    return;
+                }
+                if (desejaAgendar === 'sim' && !dataVisita) {
+                    alert("Por favor, selecione a Data Preferida para Visita.");
+                    document.getElementById('data_visita').focus();
+                    return;
+                }
+
                 const btn = document.getElementById('btnEnviarContato');
                 btn.innerText = 'Enviando...';
                 btn.disabled = true;

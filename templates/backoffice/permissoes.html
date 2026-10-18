@@ -17,6 +17,7 @@
  18/08/26: Correção na função lidarComAcessoFree para disparar evento de alteração e habilitar o botão Salvar dinamicamente.
  19/08/26: Correção na extração de dados do formulário no botão Salvar para capturar campos desabilitados programaticamente.
  19/08/26: Adição da permissão mod_precos (Tabela de Preços) na matriz de acesso.
+ 17/10/26: Adição da permissão mod_atendimento (Central de Atendimento) na matriz de acesso.
 ============================================================================== #}
 
 {% extends "base.html" %}
@@ -298,7 +299,8 @@
                         ('mod_cad_perm', 'Cadastro de Permissões'),
                         ('mod_grade', 'Quadro de Vagas'),
                         ('mod_area_prof', 'Área do Professor'),
-                        ('mod_finan_planos', 'Gestão de Matrículas, Planos e Financeiro')
+                        ('mod_finan_planos', 'Gestão de Matrículas, Planos e Financeiro'),
+                        ('mod_atendimento', 'Central de Atendimento')
                     ] %}
 
                     {% for input_name, label_text in modulos %}
